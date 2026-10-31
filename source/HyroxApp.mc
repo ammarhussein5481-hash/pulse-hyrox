@@ -1,7 +1,10 @@
-// Pulse HYROX — one named lap per run / station. START begins, LAP (BACK) ends the current segment and starts the next,
-// START again pauses/resumes, long-hold BACK while paused saves. Race mode follows the 16-segment HYROX format; Training mode
-// lets you pick the next station with UP/DOWN before each LAP. Each lap carries a "station" developer field for Garmin Connect
-// and Pulse. Records as Cardio (training load counts, running VO2max is untouched).
+// Pulse HYROX — one named lap per run / station.
+// Race mode: fixed 16-segment HYROX order. START begins, LAP ends the segment and starts the next.
+// Training mode: pick the exercise from the list (UP/DOWN), START begins it, LAP ends it and brings the list back
+// so you can pick the next one (Run is just an entry — skip it if you like). Recording keeps running between
+// exercises; the transition time is shown on the pick screen. On the pick screen LAP opens Resume / Save / Discard.
+// Each lap carries a "station" developer field for Garmin Connect and Pulse. Records as Cardio (training load counts,
+// running VO2max is untouched).
 import Toybox.Application;
 import Toybox.Lang;
 import Toybox.WatchUi;
@@ -14,7 +17,7 @@ import Toybox.System;
 import Toybox.Graphics;
 
 const RACE = ["Run 1", "SkiErg", "Run 2", "Sled push", "Run 3", "Sled pull", "Run 4", "Burpee BJ", "Run 5", "Row", "Run 6", "Farmers", "Run 7", "Lunges", "Run 8", "Wall balls"] as Array<String>;
-const STATIONS = ["Run", "SkiErg", "Sled push", "Sled pull", "Burpee BJ", "Row", "Farmers", "Lunges", "Wall balls", "Rest"] as Array<String>;
+const STATIONS = ["SkiErg", "Sled push", "Sled pull", "Burpee BJ", "Row", "Farmers", "Lunges", "Wall balls", "Run", "Rest"] as Array<String>;
 
 class HyroxApp extends Application.AppBase {
     function initialize() { AppBase.initialize(); }
@@ -28,11 +31,12 @@ class HyroxModel {
     var session as ActivityRecording.Session or Null = null;
     var stationField as FitContributor.Field or Null = null;
     var mode as Number = 0;              // 0 = race, 1 = training
-    var started as Boolean = false;
+    var started as Boolean = false;      // session exists and has been started at least once
+    var picking as Boolean = false;      // training: on the pick screen (before first START or after a LAP)
     var paused as Boolean = false;
     var finished as Boolean = false;
-    var seg as Number = 0;               // index into RACE, or lap count in training
-    var pick as Number = 0;              // training: index into STATIONS for the segment in progress
+    var seg as Number = 0;               // race: index into RACE; training: exercises completed
+    var pick as Number = 0;              // training: index into STATIONS
     var segStartMs as Number = 0;
     var pausedAtMs as Number = 0;
     var pausedTotalMs as Number = 0;
@@ -41,23 +45,36 @@ class HyroxModel {
         if (mode == 0) { return seg < RACE.size() ? RACE[seg] : "Finish"; }
         return STATIONS[pick];
     }
-    function start() as Void {
+    function ensureSession() as Void {
+        if (session != null) { return; }
         session = ActivityRecording.createSession({ :name => "HYROX", :sport => Activity.SPORT_TRAINING, :subSport => Activity.SUB_SPORT_CARDIO_TRAINING });
         stationField = session.createField("station", 0, FitContributor.DATA_TYPE_STRING, { :mesgType => FitContributor.MESG_TYPE_LAP, :count => 12 });
-        session.start(); started = true; segStartMs = System.getTimer(); pausedTotalMs = 0;
+    }
+    // Race: START on the start screen. Training: START on the pick screen (first exercise or a later one).
+    function begin() as Void {
+        var first = !started;
+        ensureSession();
+        if (first) { session.start(); started = true; }
+        picking = false;
+        segStartMs = System.getTimer(); pausedTotalMs = 0;
         stationField.setData(current());
         buzz(1);
     }
     function lap() as Void {
-        if (!started || paused || finished) { return; }
+        if (!started || paused || finished || picking) { return; }
         session.addLap();
+        seg += 1;
         if (mode == 0) {
-            seg += 1;
             if (seg >= RACE.size()) { finished = true; buzz(3); session.stop(); return; }
-        } else { seg += 1; }
-        segStartMs = System.getTimer(); pausedTotalMs = 0;
-        stationField.setData(current());
-        buzz(1);
+            segStartMs = System.getTimer(); pausedTotalMs = 0;
+            stationField.setData(current());
+            buzz(1);
+        } else {
+            picking = true;                                 // back to the list; transition time runs from here
+            segStartMs = System.getTimer(); pausedTotalMs = 0;
+            pick = (pick + 1) % STATIONS.size();            // suggest the next entry in the list
+            buzz(1);
+        }
     }
     function togglePause() as Void {
         if (!started || finished) { return; }
@@ -65,8 +82,8 @@ class HyroxModel {
         else { session.stop(); pausedAtMs = System.getTimer(); paused = true; }
         buzz(1);
     }
-    function save() as Void { if (session != null) { session.save(); session = null; } }
-    function discard() as Void { if (session != null) { session.discard(); session = null; } }
+    function save() as Void { if (session != null) { if (session.isRecording()) { session.stop(); } session.save(); session = null; } }
+    function discard() as Void { if (session != null) { if (session.isRecording()) { session.stop(); } session.discard(); session = null; } }
     function segMs() as Number {
         if (!started) { return 0; }
         var now = paused ? pausedAtMs : System.getTimer();
@@ -100,17 +117,36 @@ class HyroxView extends WatchUi.View {
     function onUpdate(dc as Graphics.Dc) as Void {
         var w = dc.getWidth(), h = dc.getHeight(), cx = w / 2;
         dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK); dc.clear();
-        if (!m.started) {
+        if (!m.started && !m.picking) {                       // start screen: choose mode
             dc.setColor(Graphics.COLOR_ORANGE, Graphics.COLOR_TRANSPARENT);
             dc.drawText(cx, h * 0.22, Graphics.FONT_SMALL, "PULSE HYROX", Graphics.TEXT_JUSTIFY_CENTER);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
             dc.drawText(cx, h * 0.40, Graphics.FONT_LARGE, m.mode == 0 ? "Race" : "Training", Graphics.TEXT_JUSTIFY_CENTER);
             dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
             dc.drawText(cx, h * 0.58, Graphics.FONT_TINY, "UP/DOWN: mode", Graphics.TEXT_JUSTIFY_CENTER);
-            dc.drawText(cx, h * 0.68, Graphics.FONT_TINY, "START: go  ·  LAP: next", Graphics.TEXT_JUSTIFY_CENTER);
+            dc.drawText(cx, h * 0.68, Graphics.FONT_TINY, m.mode == 0 ? "START: go  ·  LAP: next" : "START: pick exercise", Graphics.TEXT_JUSTIFY_CENTER);
             return;
         }
-        // in session: segment name, segment time (big), total time, HR, lap number
+        if (m.picking) {                                      // training: pick the next exercise
+            var n = STATIONS.size();
+            dc.setColor(Graphics.COLOR_ORANGE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.12, Graphics.FONT_SMALL, m.started ? "NEXT · " + (m.seg + 1).format("%d") : "FIRST EXERCISE", Graphics.TEXT_JUSTIFY_CENTER);
+            dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.28, Graphics.FONT_SMALL, STATIONS[(m.pick + n - 1) % n], Graphics.TEXT_JUSTIFY_CENTER);
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.40, Graphics.FONT_LARGE, STATIONS[m.pick], Graphics.TEXT_JUSTIFY_CENTER);
+            dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.56, Graphics.FONT_SMALL, STATIONS[(m.pick + 1) % n], Graphics.TEXT_JUSTIFY_CENTER);
+            dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+            if (m.started) {
+                dc.drawText(cx, h * 0.68, Graphics.FONT_TINY, "rest " + fmt(m.segMs()) + "  ·  total " + fmt(m.totalMs()), Graphics.TEXT_JUSTIFY_CENTER);
+                dc.drawText(cx, h * 0.80, Graphics.FONT_TINY, "START: go  ·  LAP: save/end", Graphics.TEXT_JUSTIFY_CENTER);
+            } else {
+                dc.drawText(cx, h * 0.70, Graphics.FONT_TINY, "UP/DOWN: choose  ·  START: go", Graphics.TEXT_JUSTIFY_CENTER);
+            }
+            return;
+        }
+        // in an exercise / race segment: name, segment time (big), total time, HR, lap number
         dc.setColor(m.paused ? Graphics.COLOR_YELLOW : Graphics.COLOR_ORANGE, Graphics.COLOR_TRANSPARENT);
         var title = m.finished ? "FINISHED" : (m.paused ? "PAUSED · " + m.current() : m.current().toUpper());
         dc.drawText(cx, h * 0.16, Graphics.FONT_MEDIUM, title, Graphics.TEXT_JUSTIFY_CENTER);
@@ -122,18 +158,17 @@ class HyroxView extends WatchUi.View {
         dc.setColor(Graphics.COLOR_RED, Graphics.COLOR_TRANSPARENT);
         dc.drawText(cx - w * 0.18, h * 0.72, Graphics.FONT_MEDIUM, hr != null ? hr.format("%d") : "--", Graphics.TEXT_JUSTIFY_CENTER);
         dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-        var lapTxt = m.mode == 0 ? (m.seg + 1).format("%d") + "/16" : "lap " + (m.seg + 1).format("%d");
+        var lapTxt = m.mode == 0 ? (m.seg + 1).format("%d") + "/16" : "#" + (m.seg + 1).format("%d");
         dc.drawText(cx + w * 0.18, h * 0.72, Graphics.FONT_MEDIUM, lapTxt, Graphics.TEXT_JUSTIFY_CENTER);
-        if (m.mode == 0 && !m.finished && m.seg + 1 < RACE.size()) {
-            dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+        dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+        if (m.finished) {
+            dc.drawText(cx, h * 0.85, Graphics.FONT_TINY, "START: save", Graphics.TEXT_JUSTIFY_CENTER);
+        } else if (m.paused) {
+            dc.drawText(cx, h * 0.85, Graphics.FONT_TINY, "START: resume · LAP: save/discard", Graphics.TEXT_JUSTIFY_CENTER);
+        } else if (m.mode == 0 && m.seg + 1 < RACE.size()) {
             dc.drawText(cx, h * 0.85, Graphics.FONT_TINY, "next: " + RACE[m.seg + 1], Graphics.TEXT_JUSTIFY_CENTER);
-        } else if (m.mode == 1 && !m.finished) {
-            dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, h * 0.85, Graphics.FONT_TINY, "UP/DOWN: station", Graphics.TEXT_JUSTIFY_CENTER);
-        }
-        if (m.finished || m.paused) {
-            dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, h * 0.85, Graphics.FONT_TINY, m.finished ? "START: save" : "START: resume · LAP: save/discard", Graphics.TEXT_JUSTIFY_CENTER);
+        } else if (m.mode == 1) {
+            dc.drawText(cx, h * 0.85, Graphics.FONT_TINY, "LAP: done, pick next", Graphics.TEXT_JUSTIFY_CENTER);
         }
     }
 }
@@ -141,31 +176,38 @@ class HyroxView extends WatchUi.View {
 class HyroxDelegate extends WatchUi.BehaviorDelegate {
     var m as HyroxModel;
     function initialize(model as HyroxModel) { BehaviorDelegate.initialize(); m = model; }
+    function pauseMenu() as Void {
+        var menu = new WatchUi.Menu2({ :title => "HYROX" });
+        menu.addItem(new WatchUi.MenuItem("Resume", null, :resume, null));
+        menu.addItem(new WatchUi.MenuItem("Save", null, :save, null));
+        menu.addItem(new WatchUi.MenuItem("Discard", null, :discard, null));
+        WatchUi.pushView(menu, new PauseMenuDelegate(m), WatchUi.SLIDE_UP);
+    }
     function onSelect() as Boolean {                       // START / ENTER
-        if (!m.started) { m.start(); }
+        if (!m.started && !m.picking) {                    // start screen
+            if (m.mode == 0) { m.begin(); } else { m.picking = true; }
+        }
+        else if (m.picking) { m.begin(); }                 // chosen exercise starts
         else if (m.finished) { m.save(); System.exit(); }
         else { m.togglePause(); }
         WatchUi.requestUpdate(); return true;
     }
     function onBack() as Boolean {                         // LAP / BACK
-        if (!m.started) { System.exit(); }
-        if (m.paused) {                                    // paused: LAP opens Resume / Save / Discard
-            var menu = new WatchUi.Menu2({ :title => "HYROX" });
-            menu.addItem(new WatchUi.MenuItem("Resume", null, :resume, null));
-            menu.addItem(new WatchUi.MenuItem("Save", null, :save, null));
-            menu.addItem(new WatchUi.MenuItem("Discard", null, :discard, null));
-            WatchUi.pushView(menu, new PauseMenuDelegate(m), WatchUi.SLIDE_UP); return true;
+        if (!m.started) {                                  // pre-start pick screen → start screen; start screen → exit
+            if (m.picking) { m.picking = false; WatchUi.requestUpdate(); return true; }
+            System.exit();
         }
+        if (m.paused || m.picking) { pauseMenu(); return true; }   // Resume / Save / Discard
         m.lap(); WatchUi.requestUpdate(); return true;
     }
     function onPreviousPage() as Boolean {                 // UP
-        if (!m.started) { m.mode = m.mode == 0 ? 1 : 0; }
-        else if (m.mode == 1 && !m.finished) { m.pick = (m.pick + STATIONS.size() - 1) % STATIONS.size(); m.stationField.setData(m.current()); }
+        if (m.picking) { m.pick = (m.pick + STATIONS.size() - 1) % STATIONS.size(); }
+        else if (!m.started) { m.mode = m.mode == 0 ? 1 : 0; }
         WatchUi.requestUpdate(); return true;
     }
     function onNextPage() as Boolean {                     // DOWN
-        if (!m.started) { m.mode = m.mode == 0 ? 1 : 0; }
-        else if (m.mode == 1 && !m.finished) { m.pick = (m.pick + 1) % STATIONS.size(); m.stationField.setData(m.current()); }
+        if (m.picking) { m.pick = (m.pick + 1) % STATIONS.size(); }
+        else if (!m.started) { m.mode = m.mode == 0 ? 1 : 0; }
         WatchUi.requestUpdate(); return true;
     }
 }
@@ -177,7 +219,7 @@ class PauseMenuDelegate extends WatchUi.Menu2InputDelegate {
         var id = item.getId();
         if (id == :save) { m.save(); System.exit(); }
         else if (id == :discard) { m.discard(); System.exit(); }
-        else { WatchUi.popView(WatchUi.SLIDE_DOWN); m.togglePause(); }
+        else { WatchUi.popView(WatchUi.SLIDE_DOWN); if (m.paused) { m.togglePause(); } }
     }
     function onBack() as Void { WatchUi.popView(WatchUi.SLIDE_DOWN); }
 }
