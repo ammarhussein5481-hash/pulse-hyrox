@@ -17,9 +17,12 @@ import Toybox.System;
 import Toybox.Graphics;
 import Toybox.Math;
 import Toybox.UserProfile;
+import Toybox.ActivityMonitor;
 
 const RACE = ["Run 1", "SkiErg", "Run 2", "Sled push", "Run 3", "Sled pull", "Run 4", "Burpee BJ", "Run 5", "Row", "Run 6", "Farmers", "Run 7", "Lunges", "Run 8", "Wall balls"] as Array<String>;
 const STATIONS = ["SkiErg", "Sled push", "Sled pull", "Burpee BJ", "Row", "Farmers", "Lunges", "Wall balls", "Run", "Rest"] as Array<String>;
+// metres per step for the step-based distance estimate in training (0 = no estimate): farmers carry, lunges, run
+const STRIDE = [0.0, 0.0, 0.0, 0.0, 0.0, 0.65, 0.75, 0.0, 1.1, 0.0] as Array<Float>;
 
 class HyroxApp extends Application.AppBase {
     function initialize() { AppBase.initialize(); }
@@ -33,6 +36,9 @@ class HyroxModel {
     var session as ActivityRecording.Session or Null = null;
     var stationField as FitContributor.Field or Null = null;
     var stationIdx as FitContributor.Field or Null = null;   // numeric twin: index into RACE (race) / STATIONS (training), +100 in training
+    var stepsField as FitContributor.Field or Null = null;   // training: steps taken during the lap (watch pedometer delta)
+    var estField as FitContributor.Field or Null = null;     // training: steps × stride for farmers / lunges / run, metres
+    var stepsAt as Number = 0;           // pedometer reading when the current lap began
     var mode as Number = 0;              // 0 = race, 1 = training
     var started as Boolean = false;      // session exists and has been started at least once
     var picking as Boolean = false;      // training: on the pick screen (before first START or after a LAP)
@@ -53,12 +59,19 @@ class HyroxModel {
         session = ActivityRecording.createSession({ :name => "HYROX", :sport => Activity.SPORT_TRAINING, :subSport => Activity.SUB_SPORT_CARDIO_TRAINING });
         stationField = session.createField("station", 0, FitContributor.DATA_TYPE_STRING, { :mesgType => FitContributor.MESG_TYPE_LAP, :count => 12 });
         stationIdx = session.createField("station_idx", 1, FitContributor.DATA_TYPE_UINT8, { :mesgType => FitContributor.MESG_TYPE_LAP });
+        stepsField = session.createField("steps", 2, FitContributor.DATA_TYPE_UINT16, { :mesgType => FitContributor.MESG_TYPE_LAP, :units => "steps" });
+        estField = session.createField("est_m", 3, FitContributor.DATA_TYPE_UINT16, { :mesgType => FitContributor.MESG_TYPE_LAP, :units => "m" });
     }
+    function pedometer() as Number { var i = ActivityMonitor.getInfo(); return (i != null && i.steps != null) ? i.steps : 0; }
+    function lapSteps() as Number { var d = pedometer() - stepsAt; return d < 0 ? 0 : d; }
+    function stride() as Float { return (mode == 1 && !picking) ? STRIDE[pick] : 0.0; }
+    function estM() as Number { return (lapSteps() * stride()).toNumber(); }
     // setData only stages the value for the next lap write, so it is re-applied on every tick while a segment runs
     function syncField() as Void {
         if (stationField == null || finished) { return; }
         stationField.setData(picking ? "Rest" : current());
         stationIdx.setData(mode == 0 ? seg : (picking ? 109 : 100 + pick));
+        stepsField.setData(lapSteps()); estField.setData(estM());
     }
     // Race: START on the start screen. Training: START on the pick screen (first exercise or a later one).
     function begin() as Void {
@@ -66,7 +79,7 @@ class HyroxModel {
         ensureSession();
         if (first) { session.start(); started = true; }
         picking = false;
-        segStartMs = System.getTimer(); pausedTotalMs = 0;
+        segStartMs = System.getTimer(); pausedTotalMs = 0; stepsAt = pedometer();
         syncField();
         buzz(1);
     }
@@ -76,12 +89,12 @@ class HyroxModel {
         seg += 1;
         if (mode == 0) {
             if (seg >= RACE.size()) { finished = true; buzz(3); session.stop(); return; }
-            segStartMs = System.getTimer(); pausedTotalMs = 0;
+            segStartMs = System.getTimer(); pausedTotalMs = 0; stepsAt = pedometer();
             syncField();
             buzz(1);
         } else {
             picking = true;                                 // back to the list; transition time runs from here
-            segStartMs = System.getTimer(); pausedTotalMs = 0;
+            segStartMs = System.getTimer(); pausedTotalMs = 0; stepsAt = pedometer();
             pick = (pick + 1) % STATIONS.size();            // suggest the next entry in the list
             syncField();
             buzz(1);
@@ -198,6 +211,9 @@ class HyroxView extends WatchUi.View {
         if (m.mode == 0 && !m.finished && !m.paused && m.seg + 1 < RACE.size()) {
             dc.setColor(D, Graphics.COLOR_TRANSPARENT);
             dc.drawText(cx, h * 0.79, Graphics.FONT_TINY, "next " + RACE[m.seg + 1], Graphics.TEXT_JUSTIFY_CENTER);
+        } else if (m.mode == 1 && !m.finished && m.stride() > 0) {
+            dc.setColor(L, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.79, Graphics.FONT_TINY, "~" + m.estM().format("%d") + " m · " + m.lapSteps().format("%d") + " steps", Graphics.TEXT_JUSTIFY_CENTER);
         }
         if (m.finished) { hint(dc, 30, "save", G); }
         else if (m.paused) { hint(dc, 30, "resume", G); hint(dc, -30, "menu", O); }
