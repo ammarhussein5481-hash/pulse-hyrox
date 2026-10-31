@@ -191,7 +191,7 @@ class HyroxView extends WatchUi.View {
         dc.drawText(cx, h * 0.56, Graphics.FONT_SMALL, "total " + fmt(m.totalMs()), Graphics.TEXT_JUSTIFY_CENTER);
         var hr = m.hr();
         dc.setColor(hrColor(hr), Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx - w * 0.14, h * 0.67, Graphics.FONT_MEDIUM, (hr != null ? hr.format("%d") : "--") + " ♥", Graphics.TEXT_JUSTIFY_CENTER);
+        dc.drawText(cx - w * 0.14, h * 0.67, Graphics.FONT_MEDIUM, hr != null ? hr.format("%d") : "--", Graphics.TEXT_JUSTIFY_CENTER);
         dc.setColor(L, Graphics.COLOR_TRANSPARENT);
         var lapTxt = m.mode == 0 ? (m.seg + 1).format("%d") + "/16" : "#" + (m.seg + 1).format("%d");
         dc.drawText(cx + w * 0.16, h * 0.67, Graphics.FONT_MEDIUM, lapTxt, Graphics.TEXT_JUSTIFY_CENTER);
