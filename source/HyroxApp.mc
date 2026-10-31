@@ -152,14 +152,14 @@ class HyroxView extends WatchUi.View {
         var w = dc.getWidth(), h = dc.getHeight(), cx = w / 2;
         var G = Graphics.COLOR_GREEN, O = Graphics.COLOR_ORANGE, D = Graphics.COLOR_DK_GRAY, L = Graphics.COLOR_LT_GRAY;
         dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK); dc.clear();
-        if (!m.started && !m.picking) {                       // start screen: choose mode
+        if (!m.started && !m.picking) {                       // start screen: choose mode (rows 0.27 / 0.73 hold the button labels)
             dc.setColor(O, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, h * 0.20, Graphics.FONT_SMALL, "PULSE HYROX", Graphics.TEXT_JUSTIFY_CENTER);
+            dc.drawText(cx, h * 0.11, Graphics.FONT_TINY, "PULSE HYROX", Graphics.TEXT_JUSTIFY_CENTER);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, h * 0.36, Graphics.FONT_LARGE, m.mode == 0 ? "Race" : "Training", Graphics.TEXT_JUSTIFY_CENTER);
+            dc.drawText(cx, h * 0.24, Graphics.FONT_LARGE, m.mode == 0 ? "Race" : "Training", Graphics.TEXT_JUSTIFY_CENTER);
             dc.setColor(L, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, h * 0.56, Graphics.FONT_TINY, m.mode == 0 ? "16 segments, fixed order" : "pick each exercise", Graphics.TEXT_JUSTIFY_CENTER);
-            dc.drawText(cx, h * 0.65, Graphics.FONT_TINY, m.mode == 0 ? "LAP ends each segment" : "START or LAP ends it", Graphics.TEXT_JUSTIFY_CENTER);
+            dc.drawText(cx, h * 0.47, Graphics.FONT_TINY, m.mode == 0 ? "16 segments, fixed order" : "pick each exercise", Graphics.TEXT_JUSTIFY_CENTER);
+            dc.drawText(cx, h * 0.56, Graphics.FONT_TINY, m.mode == 0 ? "LAP ends each one" : "START or LAP ends it", Graphics.TEXT_JUSTIFY_CENTER);
             hint(dc, 30, m.mode == 0 ? "go" : "pick", G); hint(dc, 150, "mode", D); hint(dc, 210, "mode", D); hint(dc, -30, "exit", D);
             return;
         }
