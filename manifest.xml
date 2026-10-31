@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<!-- Pulse HYROX: a Connect IQ watch app that records a HYROX race or training session as a Cardio activity with one named lap per
+     run / station (LAP key), so Garmin Connect and Pulse get per-station times. Built for the epix Pro (Gen 2) 47 mm. -->
+<iq:manifest xmlns:iq="http://www.garmin.com/xml/connectiq" version="3">
+  <iq:application id="8f3c2d1e-5a6b-4c7d-9e0f-1a2b3c4d5e6f" type="watch-app" name="@Strings.AppName" launcherIcon="@Drawables.LauncherIcon" entry="HyroxApp" minSdkVersion="3.2.0">
+    <iq:products>
+      <iq:product id="epix2pro47mm"/>
+      <iq:product id="epix2pro42mm"/>
+      <iq:product id="epix2pro51mm"/>
+      <iq:product id="epix2"/>
+      <iq:product id="fenix7"/>
+      <iq:product id="fenix7pro"/>
+    </iq:products>
+    <iq:permissions>
+      <iq:uses-permission id="Fit"/>
+      <iq:uses-permission id="FitContributor"/>
+      <iq:uses-permission id="Sensor"/>
+    </iq:permissions>
+    <iq:languages><iq:language>eng</iq:language></iq:languages>
+  </iq:application>
+</iq:manifest>
