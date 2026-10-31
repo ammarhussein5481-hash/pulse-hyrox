@@ -15,6 +15,8 @@ import Toybox.Timer;
 import Toybox.Attention;
 import Toybox.System;
 import Toybox.Graphics;
+import Toybox.Math;
+import Toybox.UserProfile;
 
 const RACE = ["Run 1", "SkiErg", "Run 2", "Sled push", "Run 3", "Sled pull", "Run 4", "Burpee BJ", "Run 5", "Row", "Run 6", "Farmers", "Run 7", "Lunges", "Run 8", "Wall balls"] as Array<String>;
 const STATIONS = ["SkiErg", "Sled push", "Sled pull", "Burpee BJ", "Row", "Farmers", "Lunges", "Wall balls", "Run", "Rest"] as Array<String>;
@@ -113,9 +115,15 @@ class HyroxModel {
 }
 
 class HyroxView extends WatchUi.View {
+    // Round 416 px display: everything is placed on chords that fit the circle, and button help is drawn as a coloured
+    // arc at each physical button (START 30°, LAP −30°, UP 150°, DOWN 210°) with a one-word label beside it.
     var m as HyroxModel;
     var timer as Timer.Timer;
-    function initialize(model as HyroxModel) { View.initialize(); m = model; timer = new Timer.Timer(); }
+    var zones as Array<Number> or Null = null;
+    function initialize(model as HyroxModel) {
+        View.initialize(); m = model; timer = new Timer.Timer();
+        try { zones = UserProfile.getHeartRateZones(UserProfile.HR_ZONE_SPORT_GENERIC); } catch (e) { zones = null; }
+    }
     function onShow() as Void { timer.start(method(:tick), 250, true); }
     function onHide() as Void { timer.stop(); }
     function tick() as Void { m.syncField(); WatchUi.requestUpdate(); }
@@ -123,62 +131,78 @@ class HyroxView extends WatchUi.View {
         var s = ms / 1000; var h = s / 3600; var mm = (s % 3600) / 60; var ss = s % 60;
         return h > 0 ? h.format("%d") + ":" + mm.format("%02d") + ":" + ss.format("%02d") : mm.format("%d") + ":" + ss.format("%02d");
     }
+    function hrColor(hr as Number or Null) as Number {
+        if (hr == null || zones == null || zones.size() < 6) { return Graphics.COLOR_LT_GRAY; }
+        if (hr >= zones[4]) { return Graphics.COLOR_RED; }
+        if (hr >= zones[3]) { return Graphics.COLOR_ORANGE; }
+        if (hr >= zones[2]) { return Graphics.COLOR_GREEN; }
+        if (hr >= zones[1]) { return Graphics.COLOR_BLUE; }
+        return Graphics.COLOR_LT_GRAY;
+    }
+    // arc + label at a button. deg: 30 START, -30 LAP, 150 UP, 210 DOWN (0° = 3 o'clock, counter-clockwise)
+    function hint(dc as Graphics.Dc, deg as Number, label as String, color as Number) as Void {
+        var w = dc.getWidth(), cx = w / 2, cy = dc.getHeight() / 2, r = cx - 3;
+        dc.setColor(color, Graphics.COLOR_TRANSPARENT); dc.setPenWidth(5);
+        dc.drawArc(cx, cy, r, Graphics.ARC_COUNTER_CLOCKWISE, deg - 9, deg + 9);
+        var rad = deg * Math.PI / 180.0, tx = cx + (r - 14) * Math.cos(rad), ty = cy - (r - 14) * Math.sin(rad);
+        var just = (deg > 90 && deg < 270) ? Graphics.TEXT_JUSTIFY_LEFT : Graphics.TEXT_JUSTIFY_RIGHT;
+        dc.drawText(tx, ty, Graphics.FONT_XTINY, label, just | Graphics.TEXT_JUSTIFY_VCENTER);
+    }
     function onUpdate(dc as Graphics.Dc) as Void {
         var w = dc.getWidth(), h = dc.getHeight(), cx = w / 2;
+        var G = Graphics.COLOR_GREEN, O = Graphics.COLOR_ORANGE, D = Graphics.COLOR_DK_GRAY, L = Graphics.COLOR_LT_GRAY;
         dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK); dc.clear();
         if (!m.started && !m.picking) {                       // start screen: choose mode
-            dc.setColor(Graphics.COLOR_ORANGE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, h * 0.22, Graphics.FONT_SMALL, "PULSE HYROX", Graphics.TEXT_JUSTIFY_CENTER);
+            dc.setColor(O, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.20, Graphics.FONT_SMALL, "PULSE HYROX", Graphics.TEXT_JUSTIFY_CENTER);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, h * 0.40, Graphics.FONT_LARGE, m.mode == 0 ? "Race" : "Training", Graphics.TEXT_JUSTIFY_CENTER);
-            dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, h * 0.58, Graphics.FONT_TINY, "UP/DOWN: mode", Graphics.TEXT_JUSTIFY_CENTER);
-            dc.drawText(cx, h * 0.68, Graphics.FONT_TINY, m.mode == 0 ? "START: go  ·  LAP: next" : "START: pick exercise", Graphics.TEXT_JUSTIFY_CENTER);
+            dc.drawText(cx, h * 0.36, Graphics.FONT_LARGE, m.mode == 0 ? "Race" : "Training", Graphics.TEXT_JUSTIFY_CENTER);
+            dc.setColor(L, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.56, Graphics.FONT_TINY, m.mode == 0 ? "16 segments, fixed order" : "pick each exercise", Graphics.TEXT_JUSTIFY_CENTER);
+            dc.drawText(cx, h * 0.65, Graphics.FONT_TINY, m.mode == 0 ? "LAP ends each segment" : "START or LAP ends it", Graphics.TEXT_JUSTIFY_CENTER);
+            hint(dc, 30, m.mode == 0 ? "go" : "pick", G); hint(dc, 150, "mode", D); hint(dc, 210, "mode", D); hint(dc, -30, "exit", D);
             return;
         }
         if (m.picking) {                                      // training: pick the next exercise
             var n = STATIONS.size();
-            dc.setColor(Graphics.COLOR_ORANGE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, h * 0.12, Graphics.FONT_SMALL, m.started ? "NEXT · " + (m.seg + 1).format("%d") : "FIRST EXERCISE", Graphics.TEXT_JUSTIFY_CENTER);
-            dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, h * 0.28, Graphics.FONT_SMALL, STATIONS[(m.pick + n - 1) % n], Graphics.TEXT_JUSTIFY_CENTER);
+            dc.setColor(O, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.13, Graphics.FONT_SMALL, m.started ? "NEXT · " + (m.seg + 1).format("%d") : "FIRST", Graphics.TEXT_JUSTIFY_CENTER);
+            dc.setColor(D, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.27, Graphics.FONT_SMALL, STATIONS[(m.pick + n - 1) % n], Graphics.TEXT_JUSTIFY_CENTER);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, h * 0.40, Graphics.FONT_LARGE, STATIONS[m.pick], Graphics.TEXT_JUSTIFY_CENTER);
-            dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, h * 0.56, Graphics.FONT_SMALL, STATIONS[(m.pick + 1) % n], Graphics.TEXT_JUSTIFY_CENTER);
-            dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.38, Graphics.FONT_LARGE, STATIONS[m.pick], Graphics.TEXT_JUSTIFY_CENTER);
+            dc.setColor(D, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.54, Graphics.FONT_SMALL, STATIONS[(m.pick + 1) % n], Graphics.TEXT_JUSTIFY_CENTER);
             if (m.started) {
-                dc.drawText(cx, h * 0.68, Graphics.FONT_TINY, "rest " + fmt(m.segMs()) + "  ·  total " + fmt(m.totalMs()), Graphics.TEXT_JUSTIFY_CENTER);
-                dc.drawText(cx, h * 0.80, Graphics.FONT_TINY, "START: go  ·  LAP: save/end", Graphics.TEXT_JUSTIFY_CENTER);
-            } else {
-                dc.drawText(cx, h * 0.70, Graphics.FONT_TINY, "UP/DOWN: choose  ·  START: go", Graphics.TEXT_JUSTIFY_CENTER);
+                dc.setColor(L, Graphics.COLOR_TRANSPARENT);
+                dc.drawText(cx, h * 0.66, Graphics.FONT_TINY, "rest " + fmt(m.segMs()), Graphics.TEXT_JUSTIFY_CENTER);
+                dc.drawText(cx, h * 0.74, Graphics.FONT_TINY, "total " + fmt(m.totalMs()), Graphics.TEXT_JUSTIFY_CENTER);
             }
+            hint(dc, 30, "go", G); hint(dc, 150, "up", D); hint(dc, 210, "down", D); hint(dc, -30, m.started ? "menu" : "back", m.started ? O : D);
             return;
         }
-        // in an exercise / race segment: name, segment time (big), total time, HR, lap number
-        dc.setColor(m.paused ? Graphics.COLOR_YELLOW : Graphics.COLOR_ORANGE, Graphics.COLOR_TRANSPARENT);
-        var title = m.finished ? "FINISHED" : (m.paused ? "PAUSED · " + m.current() : m.current().toUpper());
-        dc.drawText(cx, h * 0.16, Graphics.FONT_MEDIUM, title, Graphics.TEXT_JUSTIFY_CENTER);
+        // in an exercise / race segment: name, segment time (big), total time, HR (zone colour), lap number
+        dc.setColor(m.paused ? Graphics.COLOR_YELLOW : O, Graphics.COLOR_TRANSPARENT);
+        var title = m.finished ? "FINISHED" : (m.paused ? "PAUSED" : m.current().toUpper());
+        dc.drawText(cx, h * 0.15, Graphics.FONT_MEDIUM, title, Graphics.TEXT_JUSTIFY_CENTER);
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.30, Graphics.FONT_NUMBER_THAI_HOT, fmt(m.segMs()), Graphics.TEXT_JUSTIFY_CENTER);
-        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx, h * 0.60, Graphics.FONT_SMALL, "total " + fmt(m.totalMs()), Graphics.TEXT_JUSTIFY_CENTER);
+        dc.drawText(cx, h * 0.27, Graphics.FONT_NUMBER_THAI_HOT, fmt(m.segMs()), Graphics.TEXT_JUSTIFY_CENTER);
+        dc.setColor(L, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, h * 0.56, Graphics.FONT_SMALL, "total " + fmt(m.totalMs()), Graphics.TEXT_JUSTIFY_CENTER);
         var hr = m.hr();
-        dc.setColor(Graphics.COLOR_RED, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx - w * 0.18, h * 0.72, Graphics.FONT_MEDIUM, hr != null ? hr.format("%d") : "--", Graphics.TEXT_JUSTIFY_CENTER);
-        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+        dc.setColor(hrColor(hr), Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx - w * 0.14, h * 0.67, Graphics.FONT_MEDIUM, (hr != null ? hr.format("%d") : "--") + " ♥", Graphics.TEXT_JUSTIFY_CENTER);
+        dc.setColor(L, Graphics.COLOR_TRANSPARENT);
         var lapTxt = m.mode == 0 ? (m.seg + 1).format("%d") + "/16" : "#" + (m.seg + 1).format("%d");
-        dc.drawText(cx + w * 0.18, h * 0.72, Graphics.FONT_MEDIUM, lapTxt, Graphics.TEXT_JUSTIFY_CENTER);
-        dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
-        if (m.finished) {
-            dc.drawText(cx, h * 0.85, Graphics.FONT_TINY, "START: save", Graphics.TEXT_JUSTIFY_CENTER);
-        } else if (m.paused) {
-            dc.drawText(cx, h * 0.85, Graphics.FONT_TINY, "START: resume · LAP: save/discard", Graphics.TEXT_JUSTIFY_CENTER);
-        } else if (m.mode == 0 && m.seg + 1 < RACE.size()) {
-            dc.drawText(cx, h * 0.85, Graphics.FONT_TINY, "next: " + RACE[m.seg + 1], Graphics.TEXT_JUSTIFY_CENTER);
-        } else if (m.mode == 1) {
-            dc.drawText(cx, h * 0.85, Graphics.FONT_TINY, "START or LAP: done", Graphics.TEXT_JUSTIFY_CENTER);
+        dc.drawText(cx + w * 0.16, h * 0.67, Graphics.FONT_MEDIUM, lapTxt, Graphics.TEXT_JUSTIFY_CENTER);
+        if (m.mode == 0 && !m.finished && !m.paused && m.seg + 1 < RACE.size()) {
+            dc.setColor(D, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.79, Graphics.FONT_TINY, "next " + RACE[m.seg + 1], Graphics.TEXT_JUSTIFY_CENTER);
         }
+        if (m.finished) { hint(dc, 30, "save", G); }
+        else if (m.paused) { hint(dc, 30, "resume", G); hint(dc, -30, "menu", O); }
+        else if (m.mode == 0) { hint(dc, 30, "pause", D); hint(dc, -30, "next", G); }
+        else { hint(dc, 30, "done", G); hint(dc, -30, "done", G); }
     }
 }
 
