@@ -5,11 +5,6 @@
   <iq:application id="8f3c2d1e-5a6b-4c7d-9e0f-1a2b3c4d5e6f" type="watch-app" name="@Strings.AppName" launcherIcon="@Drawables.LauncherIcon" entry="HyroxApp" minSdkVersion="3.2.0">
     <iq:products>
       <iq:product id="epix2pro47mm"/>
-      <iq:product id="epix2pro42mm"/>
-      <iq:product id="epix2pro51mm"/>
-      <iq:product id="epix2"/>
-      <iq:product id="fenix7"/>
-      <iq:product id="fenix7pro"/>
     </iq:products>
     <iq:permissions>
       <iq:uses-permission id="Fit"/>

@@ -148,7 +148,7 @@ class HyroxDelegate extends WatchUi.BehaviorDelegate {
         WatchUi.requestUpdate(); return true;
     }
     function onBack() as Boolean {                         // LAP / BACK
-        if (!m.started) { System.exit(); return true; }
+        if (!m.started) { System.exit(); }
         if (m.paused) {                                    // paused: LAP opens Resume / Save / Discard
             var menu = new WatchUi.Menu2({ :title => "HYROX" });
             menu.addItem(new WatchUi.MenuItem("Resume", null, :resume, null));
