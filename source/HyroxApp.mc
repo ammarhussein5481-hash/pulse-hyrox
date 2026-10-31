@@ -30,6 +30,7 @@ class HyroxApp extends Application.AppBase {
 class HyroxModel {
     var session as ActivityRecording.Session or Null = null;
     var stationField as FitContributor.Field or Null = null;
+    var stationIdx as FitContributor.Field or Null = null;   // numeric twin: index into RACE (race) / STATIONS (training), +100 in training
     var mode as Number = 0;              // 0 = race, 1 = training
     var started as Boolean = false;      // session exists and has been started at least once
     var picking as Boolean = false;      // training: on the pick screen (before first START or after a LAP)
@@ -49,6 +50,13 @@ class HyroxModel {
         if (session != null) { return; }
         session = ActivityRecording.createSession({ :name => "HYROX", :sport => Activity.SPORT_TRAINING, :subSport => Activity.SUB_SPORT_CARDIO_TRAINING });
         stationField = session.createField("station", 0, FitContributor.DATA_TYPE_STRING, { :mesgType => FitContributor.MESG_TYPE_LAP, :count => 12 });
+        stationIdx = session.createField("station_idx", 1, FitContributor.DATA_TYPE_UINT8, { :mesgType => FitContributor.MESG_TYPE_LAP });
+    }
+    // setData only stages the value for the next lap write, so it is re-applied on every tick while a segment runs
+    function syncField() as Void {
+        if (stationField == null || finished) { return; }
+        stationField.setData(picking ? "Rest" : current());
+        stationIdx.setData(mode == 0 ? seg : (picking ? 109 : 100 + pick));
     }
     // Race: START on the start screen. Training: START on the pick screen (first exercise or a later one).
     function begin() as Void {
@@ -57,7 +65,7 @@ class HyroxModel {
         if (first) { session.start(); started = true; }
         picking = false;
         segStartMs = System.getTimer(); pausedTotalMs = 0;
-        stationField.setData(current());
+        syncField();
         buzz(1);
     }
     function lap() as Void {
@@ -67,12 +75,13 @@ class HyroxModel {
         if (mode == 0) {
             if (seg >= RACE.size()) { finished = true; buzz(3); session.stop(); return; }
             segStartMs = System.getTimer(); pausedTotalMs = 0;
-            stationField.setData(current());
+            syncField();
             buzz(1);
         } else {
             picking = true;                                 // back to the list; transition time runs from here
             segStartMs = System.getTimer(); pausedTotalMs = 0;
             pick = (pick + 1) % STATIONS.size();            // suggest the next entry in the list
+            syncField();
             buzz(1);
         }
     }
@@ -109,7 +118,7 @@ class HyroxView extends WatchUi.View {
     function initialize(model as HyroxModel) { View.initialize(); m = model; timer = new Timer.Timer(); }
     function onShow() as Void { timer.start(method(:tick), 250, true); }
     function onHide() as Void { timer.stop(); }
-    function tick() as Void { WatchUi.requestUpdate(); }
+    function tick() as Void { m.syncField(); WatchUi.requestUpdate(); }
     function fmt(ms as Number) as String {
         var s = ms / 1000; var h = s / 3600; var mm = (s % 3600) / 60; var ss = s % 60;
         return h > 0 ? h.format("%d") + ":" + mm.format("%02d") + ":" + ss.format("%02d") : mm.format("%d") + ":" + ss.format("%02d");
