@@ -168,7 +168,7 @@ class HyroxView extends WatchUi.View {
         } else if (m.mode == 0 && m.seg + 1 < RACE.size()) {
             dc.drawText(cx, h * 0.85, Graphics.FONT_TINY, "next: " + RACE[m.seg + 1], Graphics.TEXT_JUSTIFY_CENTER);
         } else if (m.mode == 1) {
-            dc.drawText(cx, h * 0.85, Graphics.FONT_TINY, "LAP: done, pick next", Graphics.TEXT_JUSTIFY_CENTER);
+            dc.drawText(cx, h * 0.85, Graphics.FONT_TINY, "START or LAP: done", Graphics.TEXT_JUSTIFY_CENTER);
         }
     }
 }
@@ -189,6 +189,7 @@ class HyroxDelegate extends WatchUi.BehaviorDelegate {
         }
         else if (m.picking) { m.begin(); }                 // chosen exercise starts
         else if (m.finished) { m.save(); System.exit(); }
+        else if (m.mode == 1 && !m.paused) { m.lap(); }     // training: START also ends the exercise → list
         else { m.togglePause(); }
         WatchUi.requestUpdate(); return true;
     }
