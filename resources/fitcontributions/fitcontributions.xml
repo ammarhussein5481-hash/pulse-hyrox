@@ -1,0 +1,7 @@
+<!-- FIT developer fields the app writes on every lap (ids match createField in HyroxApp.mc); lets Garmin Connect show them per lap -->
+<fitContributions>
+  <fitField id="0" displayInChart="false" displayInActivityLaps="true" displayInActivitySummary="false" sortOrder="0" dataLabel="@Strings.f_station" unitLabel="@Strings.f_station_u"/>
+  <fitField id="1" displayInChart="false" displayInActivityLaps="false" displayInActivitySummary="false" sortOrder="1" dataLabel="@Strings.f_idx" unitLabel="@Strings.f_idx_u"/>
+  <fitField id="2" displayInChart="false" displayInActivityLaps="true" displayInActivitySummary="false" sortOrder="2" dataLabel="@Strings.f_steps" unitLabel="@Strings.f_steps_u"/>
+  <fitField id="3" displayInChart="false" displayInActivityLaps="true" displayInActivitySummary="false" sortOrder="3" dataLabel="@Strings.f_est" unitLabel="@Strings.f_est_u"/>
+</fitContributions>

@@ -1,1 +1,11 @@
-<strings><string id="AppName">Pulse HYROX</string></strings>
+<strings>
+  <string id="AppName">Pulse HYROX</string>
+  <string id="f_station">Station</string>
+  <string id="f_station_u"></string>
+  <string id="f_idx">Station #</string>
+  <string id="f_idx_u"></string>
+  <string id="f_steps">Steps</string>
+  <string id="f_steps_u">steps</string>
+  <string id="f_est">Est. distance</string>
+  <string id="f_est_u">m</string>
+</strings>
