@@ -1,4 +1,12 @@
 project.manifest = manifest.xml
 # Colour screens compile the (:color) drawing helpers; 1-bit screens compile the (:mono) ones.
-# The per-device lines below are written by tools/devices.py from the installed definitions (the compiler rejects ids it has no definition for).
+# The per-device lines below are written by tools/devices.py from the installed definitions (the compiler rejects ids it has no definition for —
+# if you lack some definitions, re-run python3 tools/devices.py <your Devices folder>).
 base.excludeAnnotations = mono
+instinct2.excludeAnnotations = color
+instinct2s.excludeAnnotations = color
+instinct2x.excludeAnnotations = color
+instinctcrossover.excludeAnnotations = color
+instinct3solar45mm.excludeAnnotations = color
+instincte40mm.excludeAnnotations = color
+instincte45mm.excludeAnnotations = color
