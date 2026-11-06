@@ -1,1 +1,6 @@
 project.manifest = manifest.xml
+# Colour screens compile the (:color) drawing helpers; 1-bit screens (Instinct 2 / Crossover / E / 3 Solar) the (:mono) ones.
+base.excludeAnnotations = mono
+instinct2.excludeAnnotations = color
+instinct2s.excludeAnnotations = color
+instinct2x.excludeAnnotations = color
