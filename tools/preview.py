@@ -47,18 +47,18 @@ class Dev:
             if top < y + h and bot > y and rt > x - 3: rt = x - 3
         return l, rt
     def row(s, dr, yf, text, fonts, c, maxhf, issues):
+        texts = text if isinstance(text, list) else [text]
         y0 = int(s.h * yf); maxh = s.h * maxhf
-        for i, f in enumerate(fonts):
-            last = i == len(fonts) - 1
-            fh = s.fh(f)
-            if fh > maxh and not last: continue
-            l, rt = s.span(y0, fh)
-            if s.tw(text, f) <= rt - l or last:
-                if last and (s.tw(text, f) > rt - l or fh > maxh): issues.append("%r overflows (font %s)" % (text, f))
-                fo = s.font(f)[0]
-                cxx = (l + rt) / 2
-                dr.text((cxx, y0 + fh / 2), text, font=fo, fill=s.col(c), anchor="mm")
-                return (y0, y0 + fh, f)
+        for t, tx in enumerate(texts):
+            for i, f in enumerate(fonts):
+                last = i == len(fonts) - 1 and t == len(texts) - 1
+                fh = s.fh(f)
+                if fh > maxh and not last: continue
+                l, rt = s.span(y0, fh)
+                if s.tw(tx, f) <= rt - l or last:
+                    if last and (s.tw(tx, f) > rt - l or fh > maxh): issues.append("%r overflows (font %s)" % (tx, f))
+                    dr.text(((l + rt) / 2, y0 + fh / 2), tx, font=s.font(f)[0], fill=s.col(c), anchor="mm")
+                    return (y0, y0 + fh, f)
     def hint(s, dr, deg, label, c):
         if deg in (150, 210) and not s.updown: return
         r = s.cx - s.pen // 2 - 1
@@ -75,7 +75,7 @@ def screen(d, kind):
     G, O, D, L, W = (COL[k] for k in "GODLW")
     R = lambda *a: rows.append(d.row(dr, *a, iss))
     if kind == "start":
-        R(.11, "PULSE HYROX", F_TINY, O, .13); R(.24, "Training", F_TITLE, W, .22)
+        R(.11, ["PULSE HYROX", "HYROX"], F_TINY, O, .13); R(.24, "Training", F_TITLE, W, .22)
         R(.47, "pick each exercise", F_TINY, L, .10); R(.56, "START or LAP ends it", F_TINY, L, .10)
         if not d.updown: R(.68, "swipe: race / training", F_TINY, L, .10)
         d.hint(dr, 30, "pick", G); d.hint(dr, 150, "mode", D); d.hint(dr, 210, "mode", D); d.hint(dr, -30, "exit", D)
@@ -91,7 +91,7 @@ def screen(d, kind):
             f = next((f for f in F_MED if d.tw(t, f) <= cw), "xtiny")
             dr.text((x, int(d.h * .67) + d.fh(f) / 2), t, font=d.font(f)[0], fill=d.col(c), anchor="mm")
             rows.append((int(d.h * .67), int(d.h * .67) + d.fh(f), f))
-        R(.79, "~212 m · 326 steps" if kind == "ex" else "next Run 3", F_TINY, L, .10)
+        R(.79, ["~212 m · 326 steps", "~212 m · 326", "~212 m"] if kind == "ex" else "next Run 3", F_TINY, L, .10)
         d.hint(dr, 30, "done", G); d.hint(dr, -30, "done", G)
     if d.sub and kind != "start":
         x, y, w, h = d.sub; dr.ellipse([x, y, x + w, y + h], outline=(120, 120, 120))

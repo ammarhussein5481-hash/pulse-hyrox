@@ -199,16 +199,22 @@ class HyroxView extends WatchUi.View {
     }
     // draws text centred in that span with the first font from `fonts` that fits (the last one is used regardless)
     function row(dc as Graphics.Dc, yf as Float, text as String, fonts as Array<Graphics.FontDefinition>, color as Number, maxHf as Float) as Void {
+        rowAlt(dc, yf, [text] as Array<String>, fonts, color, maxHf);
+    }
+    // same with shorter wordings: each one is tried in every font before falling back to the next
+    function rowAlt(dc as Graphics.Dc, yf as Float, texts as Array<String>, fonts as Array<Graphics.FontDefinition>, color as Number, maxHf as Float) as Void {
         var y0 = (h * yf).toNumber(), maxH = h * maxHf, n = fonts.size();
-        for (var i = 0; i < n; i++) {
-            var f = fonts[i], fh = dc.getFontHeight(f);
-            var last = i == n - 1;
-            if (fh > maxH && !last) { continue; }
-            var sp = spanAt(y0, fh);
-            if (dc.getTextWidthInPixels(text, f) <= sp[1] - sp[0] || last) {
-                setC(dc, color);
-                dc.drawText((sp[0] + sp[1]) / 2, y0, f, text, Graphics.TEXT_JUSTIFY_CENTER);
-                return;
+        for (var t = 0; t < texts.size(); t++) {
+            for (var i = 0; i < n; i++) {
+                var f = fonts[i], fh = dc.getFontHeight(f);
+                var last = i == n - 1 && t == texts.size() - 1;
+                if (fh > maxH && !last) { continue; }
+                var sp = spanAt(y0, fh);
+                if (dc.getTextWidthInPixels(texts[t], f) <= sp[1] - sp[0] || last) {
+                    setC(dc, color);
+                    dc.drawText((sp[0] + sp[1]) / 2, y0, f, texts[t], Graphics.TEXT_JUSTIFY_CENTER);
+                    return;
+                }
             }
         }
     }
@@ -247,7 +253,7 @@ class HyroxView extends WatchUi.View {
         var G = Graphics.COLOR_GREEN, O = Graphics.COLOR_ORANGE, D = Graphics.COLOR_DK_GRAY, L = Graphics.COLOR_LT_GRAY, W = Graphics.COLOR_WHITE;
         dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK); dc.clear();
         if (!m.started && !m.picking) {                       // start screen: choose mode
-            row(dc, 0.11, "PULSE HYROX", F_TINY, O, 0.13);
+            rowAlt(dc, 0.11, ["PULSE HYROX", "HYROX"] as Array<String>, F_TINY, O, 0.13);
             row(dc, 0.24, m.mode == 0 ? "Race" : "Training", F_TITLE, W, 0.22);
             row(dc, 0.47, m.mode == 0 ? "16 segments, fixed order" : "pick each exercise", F_TINY, L, 0.10);
             row(dc, 0.56, m.mode == 0 ? "LAP ends each one" : "START or LAP ends it", F_TINY, L, 0.10);
@@ -284,7 +290,8 @@ class HyroxView extends WatchUi.View {
         if (m.mode == 0 && !m.finished && !m.paused && m.seg + 1 < RACE.size()) {
             row(dc, 0.79, "next " + RACE[m.seg + 1], F_TINY, D, 0.10);
         } else if (m.mode == 1 && !m.finished && m.stride() > 0) {
-            row(dc, 0.79, "~" + m.estM().format("%d") + " m · " + m.lapSteps().format("%d") + " steps", F_TINY, L, 0.10);
+            var em = "~" + m.estM().format("%d") + " m", st = m.lapSteps().format("%d");
+            rowAlt(dc, 0.79, [em + " · " + st + " steps", em + " · " + st, em] as Array<String>, F_TINY, L, 0.10);
         }
         if (m.finished) { hint(dc, 30, "save", G); }
         else if (m.paused) { hint(dc, 30, "resume", G); hint(dc, -30, "menu", O); }
