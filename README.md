@@ -7,8 +7,8 @@ A Connect IQ activity app for Garmin watches that records a **HYROX** race or tr
 - **Race mode** — the official 16 segments in order (Run 1, SkiErg, Run 2, Sled push, Run 3, Sled pull, Run 4, Burpee broad jumps, Run 5, Row, Run 6, Farmers carry, Run 7, Sandbag lunges, Run 8, Wall balls). START to begin, LAP at each transition, START to save after the last one.
 - **Training mode** — build the session as you go: pick each exercise from a list (SkiErg, Sled push, Sled pull, Burpee BJ, Row, Farmers, Lunges, Wall balls, Run, Rest), START to begin it, START or LAP to finish it and return to the list. Rest between exercises is timed; pick **Rest** to record it as its own lap.
 - Heart rate coloured by your Garmin HR zones; step-based distance estimate on screen for farmers carry, lunges and runs.
-- Records as **Cardio** (training load counts; running VO2 max and race predictions are untouched). Strava shows it as a Workout.
-- Every lap carries FIT developer fields: `station` (name), `station_idx`, `steps`, `est_m` — visible per lap in Garmin Connect when installed from the store.
+- Saved as **"HYROX Training"** or **"HYROX Race"**. Records as **Cardio** (training load counts; running VO2 max and race predictions are untouched). Strava shows it as a Workout.
+- Every lap carries FIT developer fields: `station` (name), `station_idx`, `steps`, `est_m` — visible per lap in Garmin Connect (Laps tab) only for sessions recorded with the store-installed app — a sideloaded build's columns are not shown.
 - No settings, no account, no network: nothing leaves the watch. [Privacy policy](docs/privacy.html).
 
 Built for 74 round Garmin watches (full list in `devices.txt`):

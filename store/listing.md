@@ -16,7 +16,7 @@ The activity records as Cardio, so training load counts but your running VO2 max
 No settings, no account, no data leaves the watch. Works on fēnix, epix, Enduro, MARQ, Descent, Forerunner, Instinct, Venu and vívoactive watches; on two-button touch watches you choose exercises by swiping.
 
 ## What's new
-1.1.0 — 74 watches: fēnix 5 Plus–8, epix, Enduro, MARQ 2, D2, Descent, Forerunner 165–970, Instinct 2 / Crossover / 3 / E, Venu and vívoactive. Layout adapts to every screen size; Instinct shows heart rate in the small window; touch watches choose by swiping. Screen taps and sideways swipes no longer end a lap.
+1.1.0 — 74 watches: fēnix 5 Plus–8, epix, Enduro, MARQ 2, D2, Descent, Forerunner 165–970, Instinct 2 / Crossover / 3 / E, Venu and vívoactive. Layout adapts to every screen size; Instinct shows heart rate in the small window; touch watches choose by swiping. Screen taps and sideways swipes no longer end a lap. Sessions are named "HYROX Training" / "HYROX Race".
 1.0.0 — first release: race and training modes, named laps, step-based distance for carries, lunges and runs.
 
 ## الوصف (العربية)

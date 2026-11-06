@@ -58,7 +58,8 @@ class HyroxModel {
     }
     function ensureSession() as Void {
         if (session != null) { return; }
-        session = ActivityRecording.createSession({ :name => "HYROX", :sport => Activity.SPORT_TRAINING, :subSport => Activity.SUB_SPORT_CARDIO_TRAINING });
+        // activity title in Garmin Connect / Strava (the header still shows the type, "Cardio": Connect IQ has no HYROX sport)
+        session = ActivityRecording.createSession({ :name => mode == 0 ? "HYROX Race" : "HYROX Training", :sport => Activity.SPORT_TRAINING, :subSport => Activity.SUB_SPORT_CARDIO_TRAINING });
         stationField = session.createField("station", 0, FitContributor.DATA_TYPE_STRING, { :mesgType => FitContributor.MESG_TYPE_LAP, :count => 12 });
         stationIdx = session.createField("station_idx", 1, FitContributor.DATA_TYPE_UINT8, { :mesgType => FitContributor.MESG_TYPE_LAP });
         stepsField = session.createField("steps", 2, FitContributor.DATA_TYPE_UINT16, { :mesgType => FitContributor.MESG_TYPE_LAP, :units => "steps" });
