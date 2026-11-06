@@ -11,7 +11,13 @@ A Connect IQ activity app for Garmin watches that records a **HYROX** race or tr
 - Every lap carries FIT developer fields: `station` (name), `station_idx`, `steps`, `est_m` — visible per lap in Garmin Connect when installed from the store.
 - No settings, no account, no network: nothing leaves the watch. [Privacy policy](docs/privacy.html).
 
-Currently built for the **epix Pro (Gen 2) 47 mm**. Other 416 × 416 round watches (fenix 7 Pro / 8 47 mm, epix 2, Forerunner 965…) should work by adding their product ids to `manifest.xml` and downloading their device definitions.
+Built for 74 round Garmin watches (full list in `devices.txt`):
+- **fēnix / epix** — fēnix 5 Plus series, 6, 7, 8 (AMOLED + Solar), epix 2 / epix Pro, Enduro, Enduro 3, MARQ 2, D2 Mach 1, Descent Mk2 / Mk3
+- **Forerunner** — 165, 245, 255, 265, 570, 745, 945, 955, 965, 970
+- **Instinct** — 2 / 2S / 2X, Crossover (+ AMOLED), 3 (AMOLED + Solar), E
+- **Venu / vívoactive** — Venu, Venu 2 / 2S / 2 Plus, Venu 3 / 3S, Venu 4, vívoactive 4 / 4S / 5 / 6
+
+Tested on hardware: epix Pro (Gen 2) 47 mm. The layout adapts per watch: each text row takes the largest font that fits the round screen at that height and stays clear of the button hints; 1-bit screens (Instinct) draw white-only and show live heart rate in the sub-screen; watches without UP/DOWN buttons (Venu, vívoactive) choose with vertical swipes and a tap acts as START on the start and pick screens. Sideways swipes are ignored and taps never end a lap, so a wet wrist can't split a station.
 
 ## Controls
 | Screen | START | LAP (BACK) | UP / DOWN |
@@ -22,10 +28,12 @@ Currently built for the **epix Pro (Gen 2) 47 mm**. Other 416 × 416 round watch
 | Training exercise | done → list | done → list | — |
 | Paused | resume | menu | — |
 
-Button help is drawn as coloured arcs beside the physical buttons (green = START action, orange = LAP menu, grey = UP/DOWN), which keeps the round screen's bottom edge clear.
+Button help is drawn as coloured arcs beside the physical buttons (green = START action, orange = LAP menu, grey = UP/DOWN), which keeps the round screen's bottom edge clear. Screens under 200 px (Instinct) show the arcs without words.
+
+On **Venu / vívoactive** (two buttons + touch): top button = START, bottom button = LAP / BACK, swipe up / down = DOWN / UP, tap = START on the start and pick screens only.
 
 ## Install
-- **Connect IQ Store**: search "Pulse HYROX" in the Connect IQ app on your phone (listing pending review).
+- **Connect IQ Store**: search "Pulse HYROX" in the Connect IQ app on your phone ([apps.garmin.com](https://apps.garmin.com), published by "Pulse").
 - **Sideload**: build or download `PulseHyrox.prg`, connect the watch by USB and copy it into `GARMIN/Apps/`. On Linux the epix mounts over MTP: wait for `mtp:host=091e_…` under `/run/user/<uid>/gvfs/`, then `gio copy PulseHyrox.prg "mtp://<host>/Internal Storage/GARMIN/Apps/PulseHyrox.prg"` (plain `cp` fails on MTP). If `lsusb` shows `091e:0003` with nothing mountable, the watch is still in Garmin mode — it switches to MTP on its own after a few seconds; repeated `error -71` in `dmesg` means the cable or the contacts.
 
 ## Build
@@ -39,6 +47,16 @@ Without the SDK on the host, `build.sh` runs the compiler in a stock Java contai
 SDK=~/connectiq-sdk-lin-9.3.0 KEY=~/dev.der ./build.sh epix2pro47mm   # sideload build → bin/PulseHyrox.prg
 SDK=~/connectiq-sdk-lin-9.3.0 KEY=~/dev.der ./build.sh                # store package  → bin/PulseHyrox.iq
 ```
+
+### Devices
+`devices.txt` is the wanted list. After downloading definitions (`for d in $(grep -v '^#' devices.txt); do connect-iq-sdk-manager device download --device $d; done`), run
+
+```sh
+python3 tools/devices.py ~/.Garmin/ConnectIQ/Devices    # writes manifest.xml products + monkey.jungle mono lines
+python3 tools/preview.py ~/.Garmin/ConnectIQ/Devices /tmp/preview   # approximate screens per watch + clipping check (needs Pillow)
+```
+
+`devices.py` keeps the ids that have a definition, a round (or Instinct semi-octagon) screen and Connect IQ ≥ 3.2, and lists 1-bit screens in `monkey.jungle` so they compile the `(:mono)` drawing helpers. The compiler rejects jungle lines for ids it has no definition for, which is why those lines are generated rather than committed by hand. `preview.py` only approximates the system fonts — confirm in the SDK simulator before trusting a new screen size.
 
 ## FIT fields
 | Field | id | type | meaning |

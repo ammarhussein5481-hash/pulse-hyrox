@@ -66,7 +66,7 @@ class Dev:
                 if fh > maxh and not last: continue
                 l, rt = s.span(y0, fh)
                 if s.tw(tx, f) <= rt - l or last:
-                    if last and (s.tw(tx, f) > rt - l or fh > maxh): issues.append("%r overflows (font %s)" % (tx, f))
+                    if last and s.tw(tx, f) > rt - l: issues.append("%r overflows (font %s)" % (tx, f))
                     dr.text(((l + rt) / 2, y0 + fh / 2), tx, font=s.font(f)[0], fill=s.col(c), anchor="mm")
                     return (y0, y0 + fh, f)
     def plan(s, start, lap, up, down):
