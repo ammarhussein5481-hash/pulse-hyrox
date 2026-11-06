@@ -158,6 +158,8 @@ class HyroxView extends WatchUi.View {
     var upDown as Boolean;
     var w as Number = 0; var h as Number = 0; var cx as Number = 0; var cy as Number = 0; var pen as Number = 5;
     var sub as Graphics.BoundingBox or Null = null;        // Instinct sub-screen (the small round window), if any
+    var labels as Boolean = true;                          // button-hint words (screens under 200 px get the arcs only)
+    var ri as Number = 0; var lblW as Number = 0; var lblH as Number = 0;   // hint-label radius, reserved width, height
 
     function initialize(model as HyroxModel) {
         View.initialize(); m = model; timer = new Timer.Timer(); upDown = hasUpDown();
@@ -167,6 +169,9 @@ class HyroxView extends WatchUi.View {
         w = dc.getWidth(); h = dc.getHeight(); cx = w / 2; cy = h / 2;
         pen = w / 80; if (pen < 3) { pen = 3; }
         if (WatchUi has :getSubscreen) { sub = WatchUi.getSubscreen(); }
+        labels = w >= 200;
+        ri = cx - pen / 2 - 1 - pen - 6;
+        lblW = dc.getTextWidthInPixels("resume", Graphics.FONT_XTINY) + 6; lblH = dc.getFontHeight(Graphics.FONT_XTINY);
     }
     function onShow() as Void { timer.start(method(:tick), 250, true); }
     function onHide() as Void { timer.stop(); }
@@ -193,6 +198,13 @@ class HyroxView extends WatchUi.View {
         var d = (top - cy).abs(); var d2 = (bot - cy).abs(); if (d2 > d) { d = d2; }
         var r = cx.toFloat(), half = 0.0;
         if (d < r) { half = Math.sqrt(r * r - d * d) * 0.92; }
+        if (labels) {                                     // keep clear of the hint words at ±30° / 150° / 210°
+            var ly = ri / 2, edge = ri * 0.866 - lblW;
+            for (var k = -1; k <= 1; k += 2) {
+                var a = cy + k * ly - lblH / 2, b = cy + k * ly + lblH / 2;
+                if (top < b && bot > a && half > edge) { half = edge; }
+            }
+        }
         var l = cx - half, rt = cx + half;
         if (sub != null && top < sub.y + sub.height && bot > sub.y && rt > sub.x - 3) { rt = (sub.x - 3).toFloat(); }
         return [l.toNumber(), rt.toNumber()] as Array<Number>;
@@ -233,7 +245,8 @@ class HyroxView extends WatchUi.View {
         setC(dc, color);
         dc.setPenWidth(color == Graphics.COLOR_DK_GRAY ? (pen + 1) / 2 : pen);   // thinner when dim (mono shows no grey)
         dc.drawArc(cx, cy, r, Graphics.ARC_COUNTER_CLOCKWISE, deg - 9, deg + 9);
-        var ri = r - pen - 6, rad = deg * Math.PI / 180.0;
+        if (!labels) { return; }
+        var rad = deg * Math.PI / 180.0;
         var tx = cx + ri * Math.cos(rad), ty = cy - ri * Math.sin(rad);
         var just = (deg > 90 && deg < 270) ? Graphics.TEXT_JUSTIFY_LEFT : Graphics.TEXT_JUSTIFY_RIGHT;
         dc.drawText(tx, ty, Graphics.FONT_XTINY, label, just | Graphics.TEXT_JUSTIFY_VCENTER);

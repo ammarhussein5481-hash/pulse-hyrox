@@ -26,6 +26,8 @@ class Dev:
         s.id = spec["id"]; s.w = spec["w"]; s.h = spec["h"]; s.cx = s.w // 2; s.cy = s.h // 2
         s.sizes = spec["fonts"]; s.mono = spec["mono"]; s.updown = spec["updown"]; s.sub = spec.get("sub")
         s.pen = max(3, s.w // 80); s._f = {}
+        s.labels = s.w >= 200; s.ri = s.cx - s.pen // 2 - 1 - s.pen - 6
+        s.lblW = s.tw("resume", "xtiny") + 6; s.lblH = s.fh("xtiny")
     def font(s, name):
         if name not in s._f:
             px = s.sizes[name]
@@ -41,6 +43,11 @@ class Dev:
         top, bot = y0 + fh * .18, y0 + fh * .82
         d = max(abs(top - s.cy), abs(bot - s.cy)); r = s.cx
         half = math.sqrt(r * r - d * d) * .92 if d < r else 0
+        if s.labels:
+            ly = s.ri / 2; edge = s.ri * .866 - s.lblW
+            for k in (-1, 1):
+                a, b = s.cy + k * ly - s.lblH / 2, s.cy + k * ly + s.lblH / 2
+                if top < b and bot > a and half > edge: half = edge
         l, rt = s.cx - half, s.cx + half
         if s.sub:
             x, y, w, h = s.sub
@@ -65,7 +72,8 @@ class Dev:
         pw = (s.pen + 1) // 2 if c == COL["D"] else s.pen
         bbox = [s.cx - r, s.cy - r, s.cx + r, s.cy + r]
         dr.arc(bbox, -(deg + 9), -(deg - 9), fill=s.col(c), width=pw)
-        ri = r - s.pen - 6; rad = math.radians(deg)
+        if not s.labels: return
+        ri = s.ri; rad = math.radians(deg)
         tx, ty = s.cx + ri * math.cos(rad), s.cy - ri * math.sin(rad)
         anchor = "lm" if 90 < deg < 270 else "rm"
         dr.text((tx, ty), label, font=s.font("xtiny")[0], fill=s.col(c), anchor=anchor)
