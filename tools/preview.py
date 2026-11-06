@@ -90,13 +90,13 @@ def screen(d, kind):
     if kind == "start":
         d.plan("pick", "exit", "mode", "mode")
         R(.11, ["PULSE HYROX", "HYROX"], F_TINY, O, .13); R(.24, "Training", F_TITLE, W, .22)
-        R(.47, "pick each exercise", F_TINY, L, .10); R(.56, "START or LAP ends it", F_TINY, L, .10)
+        R(.47, "pick each exercise", F_TINY, L, .09); R(.56, "START or LAP ends it", F_TINY, L, .09)
         if not d.updown: R(.66, ["swipe: race / training", "swipe for mode"], F_TINY, L, .10)
         d.hint(dr, 30, "pick", G); d.hint(dr, 150, "mode", D); d.hint(dr, 210, "mode", D); d.hint(dr, -30, "exit", D)
     elif kind == "pick":
         d.plan("go", "menu", "up", "down")
         R(.13, "NEXT · 5", F_SMALL, O, .15); R(.27, "Sled push", F_SMALL, D, .13); R(.38, "Wall balls", F_TITLE, W, .19)
-        R(.54, "Burpee BJ", F_SMALL, D, .13); R(.66, "rest 1:23", F_TINY, L, .10); R(.74, "total 24:05", F_TINY, L, .10)
+        R(.54, "Burpee BJ", F_SMALL, D, .13); R(.66, "rest 1:23", F_TINY, L, .085); R(.74, "total 24:05", F_TINY, L, .085)
         d.hint(dr, 30, "go", G); d.hint(dr, 150, "up", D); d.hint(dr, 210, "down", D); d.hint(dr, -30, "menu", O)
     else:
         hs, hl = ("done", "done") if kind == "ex" else ("pause", "next")

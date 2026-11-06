@@ -290,8 +290,8 @@ class HyroxView extends WatchUi.View {
             plan(dc, go, "exit", "mode", "mode");
             rowAlt(dc, 0.11, ["PULSE HYROX", "HYROX"] as Array<String>, F_TINY, O, 0.13);
             row(dc, 0.24, m.mode == 0 ? "Race" : "Training", F_TITLE, W, 0.22);
-            row(dc, 0.47, m.mode == 0 ? "16 segments, fixed order" : "pick each exercise", F_TINY, L, 0.10);
-            row(dc, 0.56, m.mode == 0 ? "LAP ends each one" : "START or LAP ends it", F_TINY, L, 0.10);
+            row(dc, 0.47, m.mode == 0 ? "16 segments, fixed order" : "pick each exercise", F_TINY, L, 0.09);
+            row(dc, 0.56, m.mode == 0 ? "LAP ends each one" : "START or LAP ends it", F_TINY, L, 0.09);
             if (!upDown) { rowAlt(dc, 0.66, ["swipe: race / training", "swipe for mode"] as Array<String>, F_TINY, L, 0.10); }
             hints(dc, go, G, "exit", D, "mode", "mode");
             return;
@@ -305,8 +305,8 @@ class HyroxView extends WatchUi.View {
             row(dc, 0.38, STATIONS[m.pick], F_TITLE, W, 0.19);
             row(dc, 0.54, STATIONS[(m.pick + 1) % n], F_SMALL, D, 0.13);
             if (m.started) {
-                row(dc, 0.66, "rest " + fmt(m.segMs()), F_TINY, L, 0.10);
-                row(dc, 0.74, "total " + fmt(m.totalMs()), F_TINY, L, 0.10);
+                row(dc, 0.66, "rest " + fmt(m.segMs()), F_TINY, L, 0.085);
+                row(dc, 0.74, "total " + fmt(m.totalMs()), F_TINY, L, 0.085);
             } else if (!upDown) {
                 row(dc, 0.68, "swipe to choose", F_TINY, L, 0.10);
             }
