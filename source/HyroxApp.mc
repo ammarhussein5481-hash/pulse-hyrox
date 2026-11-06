@@ -159,7 +159,8 @@ class HyroxView extends WatchUi.View {
     var w as Number = 0; var h as Number = 0; var cx as Number = 0; var cy as Number = 0; var pen as Number = 5;
     var sub as Graphics.BoundingBox or Null = null;        // Instinct sub-screen (the small round window), if any
     var labels as Boolean = true;                          // button-hint words (screens under 200 px get the arcs only)
-    var ri as Number = 0; var lblW as Number = 0; var lblH as Number = 0;   // hint-label radius, reserved width, height
+    var ri as Number = 0; var lblH as Number = 0;          // hint-label radius and height
+    var res as Array<Number> = [0, 0, 0, 0] as Array<Number>; // width of the hint word on this screen at START, LAP, UP, DOWN (0 = none)
 
     function initialize(model as HyroxModel) {
         View.initialize(); m = model; timer = new Timer.Timer(); upDown = hasUpDown();
@@ -171,7 +172,7 @@ class HyroxView extends WatchUi.View {
         if (WatchUi has :getSubscreen) { sub = WatchUi.getSubscreen(); }
         labels = w >= 200;
         ri = cx - pen / 2 - 1 - pen - 6;
-        lblW = dc.getTextWidthInPixels("resume", Graphics.FONT_XTINY) + 6; lblH = dc.getFontHeight(Graphics.FONT_XTINY);
+        lblH = dc.getFontHeight(Graphics.FONT_XTINY);
     }
     function onShow() as Void { timer.start(method(:tick), 250, true); }
     function onHide() as Void { timer.stop(); }
@@ -198,14 +199,18 @@ class HyroxView extends WatchUi.View {
         var d = (top - cy).abs(); var d2 = (bot - cy).abs(); if (d2 > d) { d = d2; }
         var r = cx.toFloat(), half = 0.0;
         if (d < r) { half = Math.sqrt(r * r - d * d) * 0.92; }
-        if (labels) {                                     // keep clear of the hint words at ±30° / 150° / 210°
-            var ly = ri / 2, edge = ri * 0.866 - lblW;
-            for (var k = -1; k <= 1; k += 2) {
-                var a = cy + k * ly - lblH / 2, b = cy + k * ly + lblH / 2;
-                if (top < b && bot > a && half > edge) { half = edge; }
+        var l = cx - half, rt = cx + half;
+        if (labels) {                                     // keep clear of this screen's hint words (upper row: START / UP, lower: LAP / DOWN)
+            var ly = ri / 2, ex = ri * 0.866;
+            for (var k = 0; k < 2; k++) {
+                var yc = k == 0 ? cy - ly : cy + ly;
+                if (top < yc + lblH / 2 && bot > yc - lblH / 2) {
+                    var wr = res[k], wl = res[k + 2];
+                    if (wr > 0 && rt > cx + ex - wr - 4) { rt = cx + ex - wr - 4; }
+                    if (wl > 0 && l < cx - ex + wl + 4) { l = cx - ex + wl + 4; }
+                }
             }
         }
-        var l = cx - half, rt = cx + half;
         if (sub != null && top < sub.y + sub.height && bot > sub.y && rt > sub.x - 3) { rt = (sub.x - 3).toFloat(); }
         return [l.toNumber(), rt.toNumber()] as Array<Number>;
     }
@@ -237,6 +242,21 @@ class HyroxView extends WatchUi.View {
         setC(dc, color);
         dc.drawText(x, (h * yf).toNumber(), f, text, Graphics.TEXT_JUSTIFY_CENTER);
     }
+    // Button hints for the screen: [START word, START colour, LAP word, LAP colour, UP word, DOWN word] ("" = none).
+    // Reserves the words' widths first so the text rows keep clear of them, then hints() draws them last.
+    function plan(dc as Graphics.Dc, start as String, lap as String, up as String, down as String) as Void {
+        var words = [start, lap, up, down] as Array<String>;
+        for (var i = 0; i < 4; i++) {
+            var on = labels && words[i].length() > 0 && (i < 2 || upDown);
+            res[i] = on ? dc.getTextWidthInPixels(words[i], Graphics.FONT_XTINY) : 0;
+        }
+    }
+    function hints(dc as Graphics.Dc, start as String, sc as Number, lap as String, lc as Number, up as String, down as String) as Void {
+        if (start.length() > 0) { hint(dc, 30, start, sc); }
+        if (lap.length() > 0) { hint(dc, -30, lap, lc); }
+        if (up.length() > 0) { hint(dc, 150, up, Graphics.COLOR_DK_GRAY); }
+        if (down.length() > 0) { hint(dc, 210, down, Graphics.COLOR_DK_GRAY); }
+    }
     // arc + label at a button. deg: 30 START, -30 LAP, 150 UP, 210 DOWN (0° = 3 o'clock, counter-clockwise).
     // UP / DOWN hints are skipped on watches without those buttons.
     function hint(dc as Graphics.Dc, deg as Number, label as String, color as Number) as Void {
@@ -266,16 +286,20 @@ class HyroxView extends WatchUi.View {
         var G = Graphics.COLOR_GREEN, O = Graphics.COLOR_ORANGE, D = Graphics.COLOR_DK_GRAY, L = Graphics.COLOR_LT_GRAY, W = Graphics.COLOR_WHITE;
         dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK); dc.clear();
         if (!m.started && !m.picking) {                       // start screen: choose mode
+            var go = m.mode == 0 ? "go" : "pick";
+            plan(dc, go, "exit", "mode", "mode");
             rowAlt(dc, 0.11, ["PULSE HYROX", "HYROX"] as Array<String>, F_TINY, O, 0.13);
             row(dc, 0.24, m.mode == 0 ? "Race" : "Training", F_TITLE, W, 0.22);
             row(dc, 0.47, m.mode == 0 ? "16 segments, fixed order" : "pick each exercise", F_TINY, L, 0.10);
             row(dc, 0.56, m.mode == 0 ? "LAP ends each one" : "START or LAP ends it", F_TINY, L, 0.10);
-            if (!upDown) { row(dc, 0.68, "swipe: race / training", F_TINY, L, 0.10); }
-            hint(dc, 30, m.mode == 0 ? "go" : "pick", G); hint(dc, 150, "mode", D); hint(dc, 210, "mode", D); hint(dc, -30, "exit", D);
+            if (!upDown) { rowAlt(dc, 0.66, ["swipe: race / training", "swipe for mode"] as Array<String>, F_TINY, L, 0.10); }
+            hints(dc, go, G, "exit", D, "mode", "mode");
             return;
         }
         if (m.picking) {                                      // training: pick the next exercise
             var n = STATIONS.size();
+            var back = m.started ? "menu" : "back";
+            plan(dc, "go", back, "up", "down");
             row(dc, 0.13, m.started ? "NEXT · " + (m.seg + 1).format("%d") : "FIRST", F_SMALL, O, 0.15);
             row(dc, 0.27, STATIONS[(m.pick + n - 1) % n], F_SMALL, D, 0.13);
             row(dc, 0.38, STATIONS[m.pick], F_TITLE, W, 0.19);
@@ -286,30 +310,32 @@ class HyroxView extends WatchUi.View {
             } else if (!upDown) {
                 row(dc, 0.68, "swipe to choose", F_TINY, L, 0.10);
             }
-            hint(dc, 30, "go", G); hint(dc, 150, "up", D); hint(dc, 210, "down", D); hint(dc, -30, m.started ? "menu" : "back", m.started ? O : D);
+            hints(dc, "go", G, back, m.started ? O : D, "up", "down");
             drawSub(dc);
             return;
         }
         // in an exercise / race segment: name, segment time (big), total time, HR (zone colour), lap number
+        var hs = "done", hsc = G, hl = "done", hlc = G;
+        if (m.finished) { hs = "save"; hl = ""; }
+        else if (m.paused) { hs = "resume"; hl = "menu"; hlc = O; }
+        else if (m.mode == 0) { hs = "pause"; hsc = D; hl = "next"; }
+        plan(dc, hs, hl, "", "");
         var title = m.finished ? "FINISHED" : (m.paused ? "PAUSED" : m.current().toUpper());
         row(dc, 0.15, title, F_MED, m.paused ? Graphics.COLOR_YELLOW : O, 0.14);
         row(dc, 0.27, fmt(m.segMs()), F_NUM, W, 0.32);
         row(dc, 0.56, "total " + fmt(m.totalMs()), F_SMALL, L, 0.12);
         var hr = m.hr();
         var lapTxt = m.mode == 0 ? (m.seg + 1).format("%d") + "/16" : "#" + (m.seg + 1).format("%d");
-        var sp = spanAt((h * 0.67).toNumber(), dc.getFontHeight(Graphics.FONT_MEDIUM)), cw = (sp[1] - sp[0]) / 2 - 4;
-        cell(dc, cx - (w * 0.15).toNumber(), 0.67, cw, hr != null ? hr.format("%d") : "--", hrColor(hr));
-        cell(dc, cx + (w * 0.16).toNumber(), 0.67, cw, lapTxt, L);
+        var sp = spanAt((h * 0.67).toNumber(), dc.getFontHeight(Graphics.FONT_MEDIUM)), cw = (sp[1] - sp[0]) / 2 - 6;
+        cell(dc, (sp[0] + cx) / 2 + 2, 0.67, cw, hr != null ? hr.format("%d") : "--", hrColor(hr));
+        cell(dc, (cx + sp[1]) / 2 - 2, 0.67, cw, lapTxt, L);
         if (m.mode == 0 && !m.finished && !m.paused && m.seg + 1 < RACE.size()) {
             row(dc, 0.79, "next " + RACE[m.seg + 1], F_TINY, D, 0.10);
         } else if (m.mode == 1 && !m.finished && m.stride() > 0) {
             var em = "~" + m.estM().format("%d") + " m", st = m.lapSteps().format("%d");
             rowAlt(dc, 0.79, [em + " · " + st + " steps", em + " · " + st, em] as Array<String>, F_TINY, L, 0.10);
         }
-        if (m.finished) { hint(dc, 30, "save", G); }
-        else if (m.paused) { hint(dc, 30, "resume", G); hint(dc, -30, "menu", O); }
-        else if (m.mode == 0) { hint(dc, 30, "pause", D); hint(dc, -30, "next", G); }
-        else { hint(dc, 30, "done", G); hint(dc, -30, "done", G); }
+        hints(dc, hs, hsc, hl, hlc, "", "");
         drawSub(dc);
     }
 }
