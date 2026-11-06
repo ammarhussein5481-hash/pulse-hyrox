@@ -84,3 +84,18 @@ vivoactive4
 vivoactive4s
 vivoactive5
 vivoactive6
+# added from the SDK device list (6 Nov 2026)
+fenix943mm
+fenix947mm
+fenix9pro43mm
+fenix9pro47mm
+fenix9pro51mm
+fenix9prosolar47mm
+fenix9prosolar51mm
+fenixe
+enduro4
+marq3
+d2mach2
+d2mach2pro
+fr170
+fr170m

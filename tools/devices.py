@@ -3,7 +3,7 @@
 
     python3 tools/devices.py ~/.Garmin/ConnectIQ/Devices
 
-Takes every id in devices.txt that has a definition in that folder, keeps the ones with a round screen and
+Takes every id in devices.txt that has a definition in that folder, keeps the ones with a round (or Instinct semi-octagon) screen and
 Connect IQ >= 3.2 (manifest minSdkVersion), writes them into manifest.xml, and lists 1-bit (mono) screens in
 monkey.jungle so they compile the (:mono) drawing helpers. Prints what was skipped and why.
 """
@@ -23,7 +23,7 @@ for d in wanted:
         skipped.append((d, "no definition")); continue
     c = json.load(open(p))
     fam = c.get("deviceFamily", "")
-    if not fam.startswith("round"):
+    if not fam.startswith(("round", "semioctagon")):   # semioctagon = Instinct (round with the sub-screen notch)
         skipped.append((d, "screen " + fam)); continue
     if max(ver(pn.get("connectIQVersion", "0")) for pn in c.get("partNumbers", [{}])) < (3, 2, 0):
         skipped.append((d, "Connect IQ < 3.2")); continue
