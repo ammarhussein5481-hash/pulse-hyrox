@@ -5,9 +5,11 @@
 # PLAN_URL=https://… bakes that address in as the default "Plan URL" (a personal sideload: Connect IQ settings are store-only).
 set -e
 SDK=${SDK:?set SDK to the unpacked Connect IQ SDK folder}; DEVICES=${DEVICES:-$HOME/.Garmin/ConnectIQ/Devices}; KEY=${KEY:?set KEY to your developer key (.der)}
-SRC=$PWD; mkdir -p bin
+mkdir -p bin
+# build from a temporary copy: jungle lines for devices whose definition is not installed are dropped (the compiler rejects them)
+SRC=$(mktemp -d); cp -r manifest.xml monkey.jungle source resources "$SRC"/
+while IFS= read -r l; do d=${l%%.*}; case "$l" in *.excludeAnnotations*) [ "$d" = base ] || [ -d "$DEVICES/$d" ] || continue;; esac; printf '%s\n' "$l"; done < monkey.jungle > "$SRC/monkey.jungle"
 if [ -n "$PLAN_URL" ]; then
-  SRC=$(mktemp -d); cp -r manifest.xml monkey.jungle source resources "$SRC"/
   sed -i "s#<property id=\"planUrl\" type=\"string\"></property>#<property id=\"planUrl\" type=\"string\">$PLAN_URL</property>#" "$SRC/resources/settings/properties.xml"
   grep -q "$PLAN_URL" "$SRC/resources/settings/properties.xml" || { echo "PLAN_URL not applied"; exit 1; }
 fi
@@ -18,5 +20,5 @@ else
   docker run --rm -v "$SDK":/sdk -v "$DEVICES":/root/.Garmin/ConnectIQ/Devices -v "$KEY":/key.der -v "$SRC":/src -v "$PWD/bin":/src/bin -w /src eclipse-temurin:17-jre \
     java -jar /sdk/bin/monkeybrains.jar -e -r -o bin/PulseHyrox.iq -f monkey.jungle -y /key.der -w
 fi
-[ "$SRC" = "$PWD" ] || rm -rf "$SRC"
+rm -rf "$SRC"
 ls -la bin/
