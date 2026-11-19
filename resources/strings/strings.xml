@@ -8,4 +8,6 @@
   <string id="f_steps_u">steps</string>
   <string id="f_est">Est. distance</string>
   <string id="f_est_u">m</string>
+  <string id="s_planUrl">Plan URL</string>
+  <string id="s_planUrlPrompt">https address of your weekly plan JSON (optional)</string>
 </strings>

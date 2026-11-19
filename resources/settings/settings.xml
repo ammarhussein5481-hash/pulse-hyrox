@@ -1,0 +1,7 @@
+<resources>
+  <settings>
+    <setting propertyKey="@Properties.planUrl" title="@Strings.s_planUrl" prompt="@Strings.s_planUrlPrompt">
+      <settingConfig type="alphaNumeric" />
+    </setting>
+  </settings>
+</resources>

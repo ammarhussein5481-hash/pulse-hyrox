@@ -3,6 +3,9 @@
 // Training mode: pick the exercise from the list (UP/DOWN), START begins it, LAP ends it and brings the list back
 // so you can pick the next one (Run is just an entry — skip it if you like). Recording keeps running between
 // exercises; the transition time is shown on the pick screen. On the pick screen LAP opens Resume / Save / Discard.
+// Plan mode: the week's session from your own server (setting "Plan URL"; Pulse writes it every Sunday). The app fetches it
+// through the phone each time it opens and keeps the last copy, so it also works with the phone away. Steps run in order:
+// LAP ends a step and starts the next, START pauses, UP/DOWN mid-step relabel the lap (skip / go back). Rest steps buzz at 0.
 // Each lap carries a "station" developer field for Garmin Connect and Pulse. Records as Cardio (training load counts,
 // running VO2max is untouched).
 // Runs on round fēnix / epix / Enduro / MARQ / Descent, Forerunner, Instinct (1-bit screen + sub-screen) and
@@ -20,6 +23,7 @@ import Toybox.Graphics;
 import Toybox.Math;
 import Toybox.UserProfile;
 import Toybox.ActivityMonitor;
+import Toybox.Communications;
 
 const RACE = ["Run 1", "SkiErg", "Run 2", "Sled push", "Run 3", "Sled pull", "Run 4", "Burpee BJ", "Run 5", "Row", "Run 6", "Farmers", "Run 7", "Lunges", "Run 8", "Wall balls"] as Array<String>;
 const STATIONS = ["SkiErg", "Sled push", "Sled pull", "Burpee BJ", "Row", "Farmers", "Lunges", "Wall balls", "Run", "Rest"] as Array<String>;
@@ -27,10 +31,24 @@ const STATIONS = ["SkiErg", "Sled push", "Sled pull", "Burpee BJ", "Row", "Farme
 const STRIDE = [0.0, 0.0, 0.0, 0.0, 0.0, 0.65, 0.75, 0.0, 1.1, 0.0] as Array<Float>;
 
 class HyroxApp extends Application.AppBase {
+    var model as HyroxModel or Null = null;
     function initialize() { AppBase.initialize(); }
+    function onStart(state as Dictionary or Null) as Void { fetchPlan(); }
     function getInitialView() as [Views] or [Views, InputDelegates] {
-        var m = new HyroxModel();
+        var m = new HyroxModel(); model = m;
         return [new HyroxView(m), new HyroxDelegate(m)];
+    }
+    // GET the plan JSON through the phone (Garmin Connect app); silently keeps the cached copy when there is no phone or no URL
+    function fetchPlan() as Void {
+        var url = Application.Properties.getValue("planUrl");
+        if (!(url instanceof String) || (url as String).length() < 12) { return; }
+        Communications.makeWebRequest(url as String, null, { :method => Communications.HTTP_REQUEST_METHOD_GET,
+            :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON }, method(:onPlan));
+    }
+    function onPlan(code as Number, data as Dictionary or String or Null) as Void {
+        if (code != 200 || !(data instanceof Dictionary) || !((data as Dictionary).get("s") instanceof Array)) { return; }
+        Application.Storage.setValue("plan", data as Dictionary<Application.PropertyKeyType, Application.PropertyValueType>);
+        if (model != null) { (model as HyroxModel).loadPlan(); WatchUi.requestUpdate(); }
     }
 }
 
@@ -41,7 +59,10 @@ class HyroxModel {
     var stepsField as FitContributor.Field or Null = null;   // training: steps taken during the lap (watch pedometer delta)
     var estField as FitContributor.Field or Null = null;     // training: steps × stride for farmers / lunges / run, metres
     var stepsAt as Number = 0;           // pedometer reading when the current lap began
-    var mode as Number = 0;              // 0 = race, 1 = training
+    var mode as Number = 0;              // 0 = race, 1 = training, 2 = plan (only when a plan has been downloaded)
+    var plan as Dictionary or Null = null;   // {"d": date, "dl": "Sun 22 Nov", "t": title, "m": minutes, "s": [[station index, label, target, rest s], …]}
+    var pos as Number = 0;               // plan: current step
+    var restBuzzed as Boolean = false;
     var started as Boolean = false;      // session exists and has been started at least once
     var picking as Boolean = false;      // training: on the pick screen (before first START or after a LAP)
     var paused as Boolean = false;
@@ -52,6 +73,31 @@ class HyroxModel {
     var pausedAtMs as Number = 0;
     var pausedTotalMs as Number = 0;
 
+    function initialize() { loadPlan(); }
+    function loadPlan() as Void {
+        var p = Application.Storage.getValue("plan");
+        plan = (p instanceof Dictionary && (p as Dictionary).get("s") instanceof Array && ((p as Dictionary).get("s") as Array).size() > 0) ? p as Dictionary : null;
+        if (plan == null && mode == 2 && !started) { mode = 0; }
+    }
+    function nSteps() as Number { return plan == null ? 0 : ((plan as Dictionary).get("s") as Array).size(); }
+    function stepAt(i as Number) as Array { return ((plan as Dictionary).get("s") as Array)[i] as Array; }
+    function stepK(i as Number) as Number { var k = stepAt(i)[0]; return (k instanceof Number && k >= 0 && k < STATIONS.size()) ? k as Number : 9; }
+    function stepLabel(i as Number) as String { var s = stepAt(i)[1]; return s instanceof String ? s as String : STATIONS[stepK(i)]; }
+    function stepTarget(i as Number) as String { var s = stepAt(i)[2]; return s instanceof String ? s as String : ""; }
+    function stepSec(i as Number) as Number { var s = stepAt(i)[3]; return s instanceof Number ? s as Number : 0; }
+    function planText(k as String) as String { if (plan == null) { return ""; } var v = (plan as Dictionary).get(k); return v instanceof String ? v as String : ""; }
+    function cycleMode(dir as Number) as Void { var n = plan != null ? 3 : 2; mode = (mode + dir + n) % n; }
+    // plan, mid-step: UP/DOWN say "this lap is really the previous / next step" (skip a step, or go back)
+    function relabel(dir as Number) as Void {
+        if (mode != 2 || !started || picking || finished || paused) { return; }
+        var p = pos + dir; if (p < 0 || p >= nSteps()) { return; }
+        pos = p; pick = stepK(pos); restBuzzed = false; syncField();
+    }
+    // rest steps: two buzzes when the rest is over (the lap keeps running until LAP)
+    function check() as Void {
+        if (mode != 2 || !started || paused || finished || restBuzzed) { return; }
+        var sec = stepSec(pos); if (sec > 0 && segMs() >= sec * 1000) { restBuzzed = true; buzz(2); }
+    }
     function current() as String {
         if (mode == 0) { return seg < RACE.size() ? RACE[seg] : "Finish"; }
         return STATIONS[pick];
@@ -67,7 +113,7 @@ class HyroxModel {
     }
     function pedometer() as Number { var i = ActivityMonitor.getInfo(); return (i != null && i.steps != null) ? i.steps : 0; }
     function lapSteps() as Number { var d = pedometer() - stepsAt; return d < 0 ? 0 : d; }
-    function stride() as Float { return (mode == 1 && !picking) ? STRIDE[pick] : 0.0; }
+    function stride() as Float { return (mode >= 1 && !picking) ? STRIDE[pick] : 0.0; }
     function estM() as Number { return (lapSteps() * stride()).toNumber(); }
     // setData only stages the value for the next lap write, so it is re-applied on every tick while a segment runs
     function syncField() as Void {
@@ -80,7 +126,7 @@ class HyroxModel {
     function begin() as Void {
         var first = !started;
         ensureSession();
-        if (first) { session.start(); started = true; }
+        if (first) { session.start(); started = true; if (mode == 2) { pos = 0; pick = stepK(0); restBuzzed = false; } }
         picking = false;
         segStartMs = System.getTimer(); pausedTotalMs = 0; stepsAt = pedometer();
         syncField();
@@ -92,6 +138,13 @@ class HyroxModel {
         seg += 1;
         if (mode == 0) {
             if (seg >= RACE.size()) { finished = true; buzz(3); session.stop(); return; }
+            segStartMs = System.getTimer(); pausedTotalMs = 0; stepsAt = pedometer();
+            syncField();
+            buzz(1);
+        } else if (mode == 2) {                             // plan: straight into the next step
+            pos += 1;
+            if (pos >= nSteps()) { finished = true; buzz(3); session.stop(); return; }
+            pick = stepK(pos); restBuzzed = false;
             segStartMs = System.getTimer(); pausedTotalMs = 0; stepsAt = pedometer();
             syncField();
             buzz(1);
@@ -177,7 +230,7 @@ class HyroxView extends WatchUi.View {
     }
     function onShow() as Void { timer.start(method(:tick), 250, true); }
     function onHide() as Void { timer.stop(); }
-    function tick() as Void { m.syncField(); WatchUi.requestUpdate(); }
+    function tick() as Void { m.syncField(); m.check(); WatchUi.requestUpdate(); }
     function fmt(ms as Number) as String {
         var s = ms / 1000; var hh = s / 3600; var mm = (s % 3600) / 60; var ss = s % 60;
         return hh > 0 ? hh.format("%d") + ":" + mm.format("%02d") + ":" + ss.format("%02d") : mm.format("%d") + ":" + ss.format("%02d");
@@ -287,13 +340,19 @@ class HyroxView extends WatchUi.View {
         var G = Graphics.COLOR_GREEN, O = Graphics.COLOR_ORANGE, D = Graphics.COLOR_DK_GRAY, L = Graphics.COLOR_LT_GRAY, W = Graphics.COLOR_WHITE;
         dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK); dc.clear();
         if (!m.started && !m.picking) {                       // start screen: choose mode
-            var go = m.mode == 0 ? "go" : "pick";
+            var go = m.mode == 1 ? "pick" : "go";
             plan(dc, go, "exit", "mode", "mode");
             rowAlt(dc, 0.11, ["PULSE HYROX", "HYROX"] as Array<String>, F_TINY, O, 0.13);
-            row(dc, 0.24, m.mode == 0 ? "Race" : "Training", F_TITLE, W, 0.22);
-            row(dc, 0.47, m.mode == 0 ? "16 segments, fixed order" : "pick each exercise", F_TINY, L, 0.09);
-            row(dc, 0.56, m.mode == 0 ? "LAP ends each one" : "START or LAP ends it", F_TINY, L, 0.09);
-            if (!upDown) { rowAlt(dc, 0.66, ["swipe: race / training", "swipe for mode"] as Array<String>, F_TINY, L, 0.10); }
+            row(dc, 0.24, m.mode == 0 ? "Race" : m.mode == 1 ? "Training" : "Plan", F_TITLE, W, 0.22);
+            if (m.mode == 2) {
+                var dl = m.planText("dl"), n = m.nSteps().format("%d");
+                rowAlt(dc, 0.47, [m.planText("t"), "this week's plan"] as Array<String>, F_TINY, W, 0.09);
+                rowAlt(dc, 0.56, [dl + " · " + n + " steps", n + " steps"] as Array<String>, F_TINY, L, 0.09);
+            } else {
+                row(dc, 0.47, m.mode == 0 ? "16 segments, fixed order" : "pick each exercise", F_TINY, L, 0.09);
+                row(dc, 0.56, m.mode == 0 ? "LAP ends each one" : "START or LAP ends it", F_TINY, L, 0.09);
+            }
+            if (!upDown) { rowAlt(dc, 0.66, ["swipe to change mode", "swipe for mode"] as Array<String>, F_TINY, L, 0.10); }
             hints(dc, go, G, "exit", D, "mode", "mode");
             return;
         }
@@ -319,24 +378,39 @@ class HyroxView extends WatchUi.View {
         var hs = "done", hsc = G, hl = "done", hlc = G;
         if (m.finished) { hs = "save"; hl = ""; }
         else if (m.paused) { hs = "resume"; hl = "menu"; hlc = O; }
-        else if (m.mode == 0) { hs = "pause"; hsc = D; hl = "next"; }
-        plan(dc, hs, hl, "", "");
-        var title = m.finished ? "FINISHED" : (m.paused ? "PAUSED" : m.current().toUpper());
-        row(dc, 0.15, title, F_MED, m.paused ? Graphics.COLOR_YELLOW : O, 0.14);
+        else if (m.mode != 1) { hs = "pause"; hsc = D; hl = "next"; }
+        var pu = "", pd = "";
+        if (m.mode == 2 && !m.finished && !m.paused) { pu = m.pos > 0 ? "prev" : ""; pd = m.pos + 1 < m.nSteps() ? "skip" : ""; }
+        plan(dc, hs, hl, pu, pd);
+        if (m.finished || m.paused || m.mode != 2) {
+            row(dc, 0.15, m.finished ? "FINISHED" : (m.paused ? "PAUSED" : m.current().toUpper()), F_MED, m.paused ? Graphics.COLOR_YELLOW : O, 0.14);
+        } else {
+            rowAlt(dc, 0.15, [m.stepLabel(m.pos).toUpper(), m.current().toUpper()] as Array<String>, F_MED, O, 0.14);
+        }
         row(dc, 0.27, fmt(m.segMs()), F_NUM, W, 0.32);
         row(dc, 0.56, "total " + fmt(m.totalMs()), F_SMALL, L, 0.12);
         var hr = m.hr();
-        var lapTxt = m.mode == 0 ? (m.seg + 1).format("%d") + "/16" : "#" + (m.seg + 1).format("%d");
+        var lapTxt = m.mode == 0 ? (m.seg + 1).format("%d") + "/16" : m.mode == 2 ? (m.pos + 1).format("%d") + "/" + m.nSteps().format("%d") : "#" + (m.seg + 1).format("%d");
         var sp = spanAt((h * 0.67).toNumber(), dc.getFontHeight(Graphics.FONT_MEDIUM)), cw = (sp[1] - sp[0]) / 2 - 6;
         cell(dc, (sp[0] + cx) / 2 + 2, 0.67, cw, hr != null ? hr.format("%d") : "--", hrColor(hr));
         cell(dc, (cx + sp[1]) / 2 - 2, 0.67, cw, lapTxt, L);
-        if (m.mode == 0 && !m.finished && !m.paused && m.seg + 1 < RACE.size()) {
+        if (m.mode == 2 && !m.finished && !m.paused) {
+            var sec = m.stepSec(m.pos), tg = m.stepTarget(m.pos);
+            if (sec > 0) {
+                var left = sec * 1000 - m.segMs();
+                row(dc, 0.79, left > 0 ? "rest " + fmt(left + 999) : "go: " + (m.pos + 1 < m.nSteps() ? m.stepLabel(m.pos + 1) : "last"), F_TINY, left > 0 ? L : G, 0.10);
+            } else if (tg.length() > 0) {
+                row(dc, 0.79, tg, F_TINY, L, 0.10);
+            } else if (m.pos + 1 < m.nSteps()) {
+                row(dc, 0.79, "next " + m.stepLabel(m.pos + 1), F_TINY, D, 0.10);
+            }
+        } else if (m.mode == 0 && !m.finished && !m.paused && m.seg + 1 < RACE.size()) {
             row(dc, 0.79, "next " + RACE[m.seg + 1], F_TINY, D, 0.10);
         } else if (m.mode == 1 && !m.finished && m.stride() > 0) {
             var em = "~" + m.estM().format("%d") + " m", st = m.lapSteps().format("%d");
             rowAlt(dc, 0.79, [em + " · " + st + " steps", em + " · " + st, em] as Array<String>, F_TINY, L, 0.10);
         }
-        hints(dc, hs, hsc, hl, hlc, "", "");
+        hints(dc, hs, hsc, hl, hlc, pu, pd);
         drawSub(dc);
     }
 }
@@ -353,7 +427,7 @@ class HyroxDelegate extends WatchUi.BehaviorDelegate {
     }
     function onSelect() as Boolean {                       // START / ENTER
         if (!m.started && !m.picking) {                    // start screen
-            if (m.mode == 0) { m.begin(); } else { m.picking = true; }
+            if (m.mode == 1) { m.picking = true; } else { m.begin(); }
         }
         else if (m.picking) { m.begin(); }                 // chosen exercise starts
         else if (m.finished) { m.save(); System.exit(); }
@@ -371,12 +445,14 @@ class HyroxDelegate extends WatchUi.BehaviorDelegate {
     }
     function onPreviousPage() as Boolean {                 // UP (or swipe down)
         if (m.picking) { m.pick = (m.pick + STATIONS.size() - 1) % STATIONS.size(); }
-        else if (!m.started) { m.mode = m.mode == 0 ? 1 : 0; }
+        else if (!m.started) { m.cycleMode(-1); }
+        else { m.relabel(-1); }
         WatchUi.requestUpdate(); return true;
     }
     function onNextPage() as Boolean {                     // DOWN (or swipe up)
         if (m.picking) { m.pick = (m.pick + 1) % STATIONS.size(); }
-        else if (!m.started) { m.mode = m.mode == 0 ? 1 : 0; }
+        else if (!m.started) { m.cycleMode(1); }
+        else { m.relabel(1); }
         WatchUi.requestUpdate(); return true;
     }
     // Touchscreens: vertical swipes scroll; sideways swipes are swallowed so a sweaty wrist can't end a lap (the default

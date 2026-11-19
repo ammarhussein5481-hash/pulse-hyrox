@@ -1,0 +1,7 @@
+<resources>
+  <properties>
+    <!-- Plan mode: address of your weekly plan JSON (empty = Plan mode hidden). Set it in the Connect IQ app settings,
+         or bake it into a personal sideload build with ./build.sh <device> PLAN_URL=... -->
+    <property id="planUrl" type="string"></property>
+  </properties>
+</resources>
