@@ -5,17 +5,20 @@ Privacy policy: https://pulse.ammarhussein.cloud/hyrox/privacy.html (site/hyrox/
 Images: `cover_1440x720.png` (hero/cover), `icon_512.png` / `icon_128.png`, screen images `shot1_start.png … shot4_race.png` (416×416, the watch's resolution, < 150 KB each). On-device store icons: not provided.
 
 ## Description (English)
-Record a HYROX race or training session with one named lap per run and station.
+Record a HYROX race or training session with one named lap per run and station, or follow a ready-made session step by step.
 
 RACE MODE follows the official 16-segment order: 8 × 1 km runs alternating with SkiErg, sled push, sled pull, burpee broad jumps, row, farmers carry, sandbag lunges and wall balls. START to begin, LAP at each transition, START to save at the finish.
 
 TRAINING MODE lets you build the session as you go: choose each exercise from a list with UP/DOWN, START to begin it, START or LAP to finish it and return to the list. Rest between exercises is timed. Farmers carry, lunges and runs get a step-based distance estimate on screen.
 
+PLAN MODE runs a whole session for you. Pick one of four ready-made sessions (Runs + stations, Erg engine, Sleds and carries, Half race sim), check its steps and targets, then LAP moves you to the next step. Rest steps count down and buzz at zero. Coaches and advanced users can load their own weekly plan from a Plan URL in the app settings.
+
 The activity records as Cardio, so training load counts but your running VO2 max and race predictions are untouched. Every lap carries the station name, steps and estimated distance as FIT fields, visible per lap in Garmin Connect. Heart rate is shown in your zone colours; button help is drawn as arcs beside each physical button.
 
-No settings, no account, no data leaves the watch. Works on fēnix, epix, Enduro, MARQ, Descent, Forerunner, Instinct, Venu and vívoactive watches; on two-button touch watches you choose exercises by swiping.
+No account and nothing leaves the watch; the optional Plan URL only downloads a plan. Works on 74 watches: fēnix, epix, Enduro, MARQ, D2, Descent, Forerunner, Instinct, Venu and vívoactive; on two-button touch watches you choose by swiping.
 
 ## What's new
+1.2.0 — Plan mode: four ready-made sessions with a step list, LAP = next step, rest countdowns; optional Plan URL for your own weekly plan. New store listing (the first listing's signing key was lost).
 1.1.0 — 74 watches: fēnix 5 Plus–8, epix, Enduro, MARQ 2, D2, Descent, Forerunner 165–970, Instinct 2 / Crossover / 3 / E, Venu and vívoactive. Layout adapts to every screen size; Instinct shows heart rate in the small window; touch watches choose by swiping. Screen taps and sideways swipes no longer end a lap. Sessions are named "HYROX Training" / "HYROX Race".
 1.0.0 — first release: race and training modes, named laps, step-based distance for carries, lunges and runs.
 
