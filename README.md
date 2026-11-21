@@ -62,6 +62,10 @@ Settings work for the store version; a sideloaded build can bake the address in 
 - **Sideload**: build or download `PulseHyrox.prg`, connect the watch by USB and copy it into `GARMIN/Apps/`. On Linux the epix mounts over MTP: wait for `mtp:host=091e_…` under `/run/user/<uid>/gvfs/`, then `gio copy PulseHyrox.prg "mtp://<host>/Internal Storage/GARMIN/Apps/PulseHyrox.prg"` (plain `cp` fails on MTP). If `lsusb` shows `091e:0003` with nothing mountable, the watch is still in Garmin mode — it switches to MTP on its own after a few seconds; repeated `error -71` in `dmesg` means the cable or the contacts.
 
 ## Build
+> **Signing key:** every version in the Connect IQ Store must be signed with the same key as the first upload. The store app
+> (id `ace7bc64-…`, listed 21 Nov 2026) is signed with the owner's laptop key `~/garmin/dev.der` — keep a backup of it; losing it
+> means a new store listing. (The first listing, id `51cf3ad7-…`, was retired because its key was lost.)
+
 Needs the Connect IQ SDK (any 7+; built with 9.3), the device definition(s) from Garmin's SDK Manager (or [connect-iq-sdk-manager-cli](https://github.com/lindell/connect-iq-sdk-manager-cli) on a headless machine: `connect-iq-sdk-manager login --username …` then `device download --device epix2pro47mm`), and a developer key (`openssl genrsa -out dev.pem 4096 && openssl pkcs8 -topk8 -inform PEM -outform DER -in dev.pem -out dev.der -nocrypt`).
 
 With Visual Studio Code + the Monkey C extension: open the folder, *Monkey C: Build for Device* / *Export Project*.
