@@ -4,7 +4,8 @@
 // so you can pick the next one (Run is just an entry — skip it if you like). Recording keeps running between
 // exercises; the transition time is shown on the pick screen. On the pick screen LAP opens Resume / Save / Discard.
 // Plan mode: the week's session from your own server (setting "Plan URL"; Pulse writes it every Sunday). The app fetches it
-// through the phone each time it opens and keeps the last copy, so it also works with the phone away. Steps run in order:
+// through the phone each time it opens and keeps the last copy, so it also works with the phone away. START on the Plan
+// screen opens the step list (scroll with UP/DOWN, "Start" begins the session). Steps run in order:
 // LAP ends a step and starts the next, START pauses, UP/DOWN mid-step relabel the lap (skip / go back). Rest steps buzz at 0.
 // Each lap carries a "station" developer field for Garmin Connect and Pulse. Records as Cardio (training load counts,
 // running VO2max is untouched).
@@ -85,6 +86,7 @@ class HyroxModel {
     function stepLabel(i as Number) as String { var s = stepAt(i)[1]; return s instanceof String ? s as String : STATIONS[stepK(i)]; }
     function stepTarget(i as Number) as String { var s = stepAt(i)[2]; return s instanceof String ? s as String : ""; }
     function stepSec(i as Number) as Number { var s = stepAt(i)[3]; return s instanceof Number ? s as Number : 0; }
+    function planMin() as String { if (plan == null) { return ""; } var v = (plan as Dictionary).get("m"); return v instanceof Number ? (v as Number).format("%d") : ""; }
     function planText(k as String) as String { if (plan == null) { return ""; } var v = (plan as Dictionary).get(k); return v instanceof String ? v as String : ""; }
     function cycleMode(dir as Number) as Void { var n = plan != null ? 3 : 2; mode = (mode + dir + n) % n; }
     // plan, mid-step: UP/DOWN say "this lap is really the previous / next step" (skip a step, or go back)
@@ -340,7 +342,7 @@ class HyroxView extends WatchUi.View {
         var G = Graphics.COLOR_GREEN, O = Graphics.COLOR_ORANGE, D = Graphics.COLOR_DK_GRAY, L = Graphics.COLOR_LT_GRAY, W = Graphics.COLOR_WHITE;
         dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK); dc.clear();
         if (!m.started && !m.picking) {                       // start screen: choose mode
-            var go = m.mode == 1 ? "pick" : "go";
+            var go = m.mode == 1 ? "pick" : m.mode == 2 ? "steps" : "go";
             plan(dc, go, "exit", "mode", "mode");
             rowAlt(dc, 0.11, ["PULSE HYROX", "HYROX"] as Array<String>, F_TINY, O, 0.13);
             row(dc, 0.24, m.mode == 0 ? "Race" : m.mode == 1 ? "Training" : "Plan", F_TITLE, W, 0.22);
@@ -427,13 +429,25 @@ class HyroxDelegate extends WatchUi.BehaviorDelegate {
     }
     function onSelect() as Boolean {                       // START / ENTER
         if (!m.started && !m.picking) {                    // start screen
-            if (m.mode == 1) { m.picking = true; } else { m.begin(); }
+            if (m.mode == 1) { m.picking = true; } else if (m.mode == 2) { previewMenu(); } else { m.begin(); }
         }
         else if (m.picking) { m.begin(); }                 // chosen exercise starts
         else if (m.finished) { m.save(); System.exit(); }
         else if (m.mode == 1 && !m.paused) { m.lap(); }     // training: START also ends the exercise → list
         else { m.togglePause(); }
         WatchUi.requestUpdate(); return true;
+    }
+    // Plan: the whole session as a scrollable list (UP/DOWN), each step with its target; "Start" on top begins it
+    function previewMenu() as Void {
+        var menu = new WatchUi.Menu2({ :title => m.planText("t").length() > 0 ? m.planText("t") : "Plan" });
+        menu.addItem(new WatchUi.MenuItem("Start", m.nSteps().format("%d") + " steps · ~" + m.planMin() + " min", :start, null));
+        for (var i = 0; i < m.nSteps(); i++) {
+            var sec = m.stepSec(i), tg = m.stepTarget(i);
+            var sub = sec > 0 ? "countdown, buzzes at 0" : (tg.length() > 0 ? tg : null);
+            menu.addItem(new WatchUi.MenuItem((i + 1).format("%d") + ". " + m.stepLabel(i), sub, i, null));
+        }
+        menu.addItem(new WatchUi.MenuItem("Start", null, :start, null));
+        WatchUi.pushView(menu, new PreviewDelegate(m), WatchUi.SLIDE_UP);
     }
     function onBack() as Boolean {                         // LAP / BACK
         if (!m.started) {                                  // pre-start pick screen → start screen; start screen → exit
@@ -469,6 +483,15 @@ class HyroxDelegate extends WatchUi.BehaviorDelegate {
     }
 }
 
+
+class PreviewDelegate extends WatchUi.Menu2InputDelegate {
+    var m as HyroxModel;
+    function initialize(model as HyroxModel) { Menu2InputDelegate.initialize(); m = model; }
+    function onSelect(item as WatchUi.MenuItem) as Void {
+        if (item.getId() == :start) { WatchUi.popView(WatchUi.SLIDE_DOWN); m.begin(); WatchUi.requestUpdate(); }
+    }
+    function onBack() as Void { WatchUi.popView(WatchUi.SLIDE_DOWN); }
+}
 
 class PauseMenuDelegate extends WatchUi.Menu2InputDelegate {
     var m as HyroxModel;
