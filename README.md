@@ -22,7 +22,10 @@ Tested on hardware: epix Pro (Gen 2) 47 mm. The layout adapts per watch: each te
 ## Controls
 | Screen | START | LAP (BACK) | UP / DOWN |
 |---|---|---|---|
-| Start | go (race) / pick (training) | exit | race ↔ training |
+| Start | go (race) / pick (training) / plans (plan) | exit | race → training → plan |
+| Plans list | choose a session → its step list | back | scroll |
+| Step list | Start (top or bottom) begins it | back | scroll |
+| Plan step | pause / resume | next step (last → finish) | relabel: previous / skip |
 | Race segment | pause / resume | next segment (16th → finish) | — |
 | Training list | begin highlighted exercise | Resume / Save / Discard menu | choose |
 | Training exercise | done → list | done → list | — |
@@ -31,6 +34,28 @@ Tested on hardware: epix Pro (Gen 2) 47 mm. The layout adapts per watch: each te
 Button help is drawn as coloured arcs beside the physical buttons (green = START action, orange = LAP menu, grey = UP/DOWN), which keeps the round screen's bottom edge clear. Screens under 200 px (Instinct) show the arcs without words.
 
 On **Venu / vívoactive** (two buttons + touch): top button = START, bottom button = LAP / BACK, swipe up / down = DOWN / UP, tap = START on the start and pick screens only.
+
+## Plans
+Plan mode runs a session step by step: LAP ends a step and starts the next, rest steps count down and buzz at 0, and every lap is
+recorded with its station name (same FIT fields as training).
+
+**Ready-made sessions** (built in, no phone or server needed): Runs + stations, Erg engine, Sleds and carries, Half race sim.
+
+**Your own plan (optional):** host a JSON file on any https address and enter it in *Garmin Connect app → Connect IQ Apps →
+Pulse HYROX → Settings → Plan URL*. The watch downloads it through the phone every time the app opens and keeps the last copy,
+so it also works with the phone away. It appears at the top of the Plans list as "this week". Format:
+
+```json
+{"d": "2026-11-22", "dl": "Sun 22 Nov", "t": "Runs + stations", "m": 65,
+ "s": [[8, "Run 1 km", "easy, can talk", 0],
+       [0, "SkiErg 500 m", "2:05/500", 0],
+       [9, "Rest 1:30", "", 90]]}
+```
+`t` title, `m` minutes, `dl` the label shown under it; each step is `[station, label, target, rest seconds]`. Station is the index
+into SkiErg 0, Sled push 1, Sled pull 2, Burpee BJ 3, Row 4, Farmers 5, Lunges 6, Wall balls 7, Run 8, Rest 9 (it decides the lap
+name in the FIT file); label (≤ 20 characters reads best) and target are free text; rest seconds > 0 makes a countdown step. Serve it
+as `application/json`. A coach can generate one per athlete; Pulse writes Ammar's every refresh (`hyrox_plan.py` in the Pulse repo).
+Settings work for the store version; a sideloaded build can bake the address in with `PLAN_URL=… ./build.sh <device>`.
 
 ## Install
 - **Connect IQ Store**: search "Pulse HYROX" in the Connect IQ app on your phone ([apps.garmin.com](https://apps.garmin.com), published by "Pulse").

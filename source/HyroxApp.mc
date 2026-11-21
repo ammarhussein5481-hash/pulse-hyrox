@@ -31,6 +31,15 @@ const STATIONS = ["SkiErg", "Sled push", "Sled pull", "Burpee BJ", "Row", "Farme
 // metres per step for the step-based distance estimate in training (0 = no estimate): farmers carry, lunges, run
 const STRIDE = [0.0, 0.0, 0.0, 0.0, 0.0, 0.65, 0.75, 0.0, 1.1, 0.0] as Array<Float>;
 
+// Built-in sessions (Plan mode works without any server): title, minutes, steps as [station index, label, target, rest seconds].
+// Same step format as a downloaded plan. Generic targets; the four formats Pulse rotates on Sundays.
+const BUILTIN = [
+    ["Runs + stations", 65, [[8, "Run 1 km", "easy, can talk", 0], [0, "SkiErg 500 m", "strong, even pace", 0], [7, "Wall balls 20", "unbroken if you can", 0], [9, "Rest 1:30", "", 90], [8, "Run 1 km", "easy, can talk", 0], [1, "Sled push 50 m", "steady, no stops", 0], [7, "Wall balls 20", "unbroken if you can", 0], [9, "Rest 1:30", "", 90], [8, "Run 1 km", "easy, can talk", 0], [3, "Burpee BJ 40 m", "steady rhythm", 0], [7, "Wall balls 20", "unbroken if you can", 0], [9, "Rest 1:30", "", 90], [8, "Run 1 km", "easy, can talk", 0], [4, "Row 500 m", "strong, even pace", 0], [7, "Wall balls 20", "unbroken if you can", 0]]],
+    ["Erg engine", 62, [[0, "SkiErg 500 m", "hard, even pace", 0], [4, "Row 500 m", "hard, even pace", 0], [9, "Rest 2:00", "", 120], [0, "SkiErg 500 m", "hard, even pace", 0], [4, "Row 500 m", "hard, even pace", 0], [9, "Rest 2:00", "", 120], [0, "SkiErg 500 m", "hard, even pace", 0], [4, "Row 500 m", "hard, even pace", 0], [9, "Rest 2:00", "", 120], [0, "SkiErg 500 m", "hard, even pace", 0], [4, "Row 500 m", "hard, even pace", 0], [9, "Rest 2:00", "", 120], [0, "SkiErg 500 m", "hard, even pace", 0], [4, "Row 500 m", "hard, even pace", 0], [9, "Rest 2:00", "", 120], [7, "Wall balls 20", "unbroken", 0], [5, "Farmers 100 m", "no put-downs", 0], [9, "Rest 1:00", "", 60], [7, "Wall balls 20", "unbroken", 0], [5, "Farmers 100 m", "no put-downs", 0], [9, "Rest 1:00", "", 60], [7, "Wall balls 20", "unbroken", 0], [5, "Farmers 100 m", "no put-downs", 0]]],
+    ["Sleds and carries", 63, [[1, "Sled push 50 m", "heavier than race", 0], [2, "Sled pull 50 m", "hand over hand", 0], [6, "Lunges 25 m", "sandbag, knee down", 0], [7, "Wall balls 15", "full squat", 0], [9, "Rest 2:00", "", 120], [1, "Sled push 50 m", "heavier than race", 0], [2, "Sled pull 50 m", "hand over hand", 0], [6, "Lunges 25 m", "sandbag, knee down", 0], [7, "Wall balls 15", "full squat", 0], [9, "Rest 2:00", "", 120], [1, "Sled push 50 m", "heavier than race", 0], [2, "Sled pull 50 m", "hand over hand", 0], [6, "Lunges 25 m", "sandbag, knee down", 0], [7, "Wall balls 15", "full squat", 0], [9, "Rest 2:00", "", 120], [1, "Sled push 50 m", "heavier than race", 0], [2, "Sled pull 50 m", "hand over hand", 0], [6, "Lunges 25 m", "sandbag, knee down", 0], [7, "Wall balls 15", "full squat", 0], [9, "Rest 2:00", "", 120], [0, "SkiErg 1000 m", "steady", 0]]],
+    ["Half race sim", 66, [[8, "Run 1 km", "steady, race-ish", 0], [0, "SkiErg 1000 m", "RPE 7", 0], [8, "Run 1 km", "steady, race-ish", 0], [1, "Sled push 50 m", "RPE 7", 0], [8, "Run 1 km", "steady, race-ish", 0], [2, "Sled pull 50 m", "RPE 7", 0], [8, "Run 1 km", "steady, race-ish", 0], [3, "Burpee BJ 80 m", "RPE 7", 0], [9, "Rest 3:00", "", 180], [4, "Row 1000 m", "easy", 0], [7, "Wall balls 50", "sets of 10-15", 0]]],
+] as Array<Array>;
+
 class HyroxApp extends Application.AppBase {
     var model as HyroxModel or Null = null;
     function initialize() { AppBase.initialize(); }
@@ -61,7 +70,8 @@ class HyroxModel {
     var estField as FitContributor.Field or Null = null;     // training: steps × stride for farmers / lunges / run, metres
     var stepsAt as Number = 0;           // pedometer reading when the current lap began
     var mode as Number = 0;              // 0 = race, 1 = training, 2 = plan (only when a plan has been downloaded)
-    var plan as Dictionary or Null = null;   // {"d": date, "dl": "Sun 22 Nov", "t": title, "m": minutes, "s": [[station index, label, target, rest s], …]}
+    var plan as Dictionary or Null = null;   // the session chosen to run: {"t": title, "m": minutes, "s": [[station index, label, target, rest s], …]}
+    var dl as Dictionary or Null = null;     // the downloaded week's plan (also has "d" date and "dl" label), if any
     var pos as Number = 0;               // plan: current step
     var restBuzzed as Boolean = false;
     var started as Boolean = false;      // session exists and has been started at least once
@@ -77,9 +87,15 @@ class HyroxModel {
     function initialize() { loadPlan(); }
     function loadPlan() as Void {
         var p = Application.Storage.getValue("plan");
-        plan = (p instanceof Dictionary && (p as Dictionary).get("s") instanceof Array && ((p as Dictionary).get("s") as Array).size() > 0) ? p as Dictionary : null;
-        if (plan == null && mode == 2 && !started) { mode = 0; }
+        dl = (p instanceof Dictionary && (p as Dictionary).get("s") instanceof Array && ((p as Dictionary).get("s") as Array).size() > 0) ? p as Dictionary : null;
     }
+    // -1 = the downloaded plan, 0.. = a built-in session
+    function choose(i as Number) as Void {
+        if (i < 0) { plan = dl; return; }
+        var b = BUILTIN[i] as Array;
+        plan = { "t" => b[0], "m" => b[1], "s" => b[2] } as Dictionary;
+    }
+    function dlText(k as String) as String { if (dl == null) { return ""; } var v = (dl as Dictionary).get(k); return v instanceof String ? v as String : ""; }
     function nSteps() as Number { return plan == null ? 0 : ((plan as Dictionary).get("s") as Array).size(); }
     function stepAt(i as Number) as Array { return ((plan as Dictionary).get("s") as Array)[i] as Array; }
     function stepK(i as Number) as Number { var k = stepAt(i)[0]; return (k instanceof Number && k >= 0 && k < STATIONS.size()) ? k as Number : 9; }
@@ -88,7 +104,7 @@ class HyroxModel {
     function stepSec(i as Number) as Number { var s = stepAt(i)[3]; return s instanceof Number ? s as Number : 0; }
     function planMin() as String { if (plan == null) { return ""; } var v = (plan as Dictionary).get("m"); return v instanceof Number ? (v as Number).format("%d") : ""; }
     function planText(k as String) as String { if (plan == null) { return ""; } var v = (plan as Dictionary).get(k); return v instanceof String ? v as String : ""; }
-    function cycleMode(dir as Number) as Void { var n = plan != null ? 3 : 2; mode = (mode + dir + n) % n; }
+    function cycleMode(dir as Number) as Void { mode = (mode + dir + 3) % 3; }
     // plan, mid-step: UP/DOWN say "this lap is really the previous / next step" (skip a step, or go back)
     function relabel(dir as Number) as Void {
         if (mode != 2 || !started || picking || finished || paused) { return; }
@@ -342,14 +358,19 @@ class HyroxView extends WatchUi.View {
         var G = Graphics.COLOR_GREEN, O = Graphics.COLOR_ORANGE, D = Graphics.COLOR_DK_GRAY, L = Graphics.COLOR_LT_GRAY, W = Graphics.COLOR_WHITE;
         dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK); dc.clear();
         if (!m.started && !m.picking) {                       // start screen: choose mode
-            var go = m.mode == 1 ? "pick" : m.mode == 2 ? "steps" : "go";
+            var go = m.mode == 1 ? "pick" : m.mode == 2 ? "plans" : "go";
             plan(dc, go, "exit", "mode", "mode");
             rowAlt(dc, 0.11, ["PULSE HYROX", "HYROX"] as Array<String>, F_TINY, O, 0.13);
             row(dc, 0.24, m.mode == 0 ? "Race" : m.mode == 1 ? "Training" : "Plan", F_TITLE, W, 0.22);
             if (m.mode == 2) {
-                var dl = m.planText("dl"), n = m.nSteps().format("%d");
-                rowAlt(dc, 0.47, [m.planText("t"), "this week's plan"] as Array<String>, F_TINY, W, 0.09);
-                rowAlt(dc, 0.56, [dl + " · " + n + " steps", n + " steps"] as Array<String>, F_TINY, L, 0.09);
+                var nb = BUILTIN.size().format("%d");
+                if (m.dl != null) {
+                    rowAlt(dc, 0.47, [m.dlText("dl") + ": " + m.dlText("t"), m.dlText("t"), "this week's plan"] as Array<String>, F_TINY, W, 0.09);
+                    rowAlt(dc, 0.56, ["+ " + nb + " ready-made sessions", "+ " + nb + " sessions"] as Array<String>, F_TINY, L, 0.09);
+                } else {
+                    rowAlt(dc, 0.47, [nb + " ready-made sessions", nb + " sessions"] as Array<String>, F_TINY, W, 0.09);
+                    rowAlt(dc, 0.56, ["LAP moves to the next step", "LAP = next step"] as Array<String>, F_TINY, L, 0.09);
+                }
             } else {
                 row(dc, 0.47, m.mode == 0 ? "16 segments, fixed order" : "pick each exercise", F_TINY, L, 0.09);
                 row(dc, 0.56, m.mode == 0 ? "LAP ends each one" : "START or LAP ends it", F_TINY, L, 0.09);
@@ -429,7 +450,7 @@ class HyroxDelegate extends WatchUi.BehaviorDelegate {
     }
     function onSelect() as Boolean {                       // START / ENTER
         if (!m.started && !m.picking) {                    // start screen
-            if (m.mode == 1) { m.picking = true; } else if (m.mode == 2) { previewMenu(); } else { m.begin(); }
+            if (m.mode == 1) { m.picking = true; } else if (m.mode == 2) { plansMenu(); } else { m.begin(); }
         }
         else if (m.picking) { m.begin(); }                 // chosen exercise starts
         else if (m.finished) { m.save(); System.exit(); }
@@ -437,17 +458,15 @@ class HyroxDelegate extends WatchUi.BehaviorDelegate {
         else { m.togglePause(); }
         WatchUi.requestUpdate(); return true;
     }
-    // Plan: the whole session as a scrollable list (UP/DOWN), each step with its target; "Start" on top begins it
-    function previewMenu() as Void {
-        var menu = new WatchUi.Menu2({ :title => m.planText("t").length() > 0 ? m.planText("t") : "Plan" });
-        menu.addItem(new WatchUi.MenuItem("Start", m.nSteps().format("%d") + " steps · ~" + m.planMin() + " min", :start, null));
-        for (var i = 0; i < m.nSteps(); i++) {
-            var sec = m.stepSec(i), tg = m.stepTarget(i);
-            var sub = sec > 0 ? "countdown, buzzes at 0" : (tg.length() > 0 ? tg : null);
-            menu.addItem(new WatchUi.MenuItem((i + 1).format("%d") + ". " + m.stepLabel(i), sub, i, null));
+    // Plan: choose this week's downloaded plan or a built-in session, then see its steps
+    function plansMenu() as Void {
+        var menu = new WatchUi.Menu2({ :title => "Plans" });
+        if (m.dl != null) { menu.addItem(new WatchUi.MenuItem(m.dlText("t"), "this week · " + m.dlText("dl"), -1, null)); }
+        for (var i = 0; i < BUILTIN.size(); i++) {
+            var b = BUILTIN[i] as Array;
+            menu.addItem(new WatchUi.MenuItem(b[0] as String, "ready-made · ~" + (b[1] as Number).format("%d") + " min", i, null));
         }
-        menu.addItem(new WatchUi.MenuItem("Start", null, :start, null));
-        WatchUi.pushView(menu, new PreviewDelegate(m), WatchUi.SLIDE_UP);
+        WatchUi.pushView(menu, new PlansDelegate(m), WatchUi.SLIDE_UP);
     }
     function onBack() as Boolean {                         // LAP / BACK
         if (!m.started) {                                  // pre-start pick screen → start screen; start screen → exit
@@ -482,6 +501,32 @@ class HyroxDelegate extends WatchUi.BehaviorDelegate {
         return true;
     }
 }
+
+// Plan: the whole session as a scrollable list (UP/DOWN), each step with its target; "Start" on top begins it
+function previewMenu(m as HyroxModel) as WatchUi.Menu2 {
+    var menu = new WatchUi.Menu2({ :title => m.planText("t").length() > 0 ? m.planText("t") : "Plan" });
+    menu.addItem(new WatchUi.MenuItem("Start", m.nSteps().format("%d") + " steps · ~" + m.planMin() + " min", :start, null));
+    for (var i = 0; i < m.nSteps(); i++) {
+        var sec = m.stepSec(i), tg = m.stepTarget(i);
+        var sub = sec > 0 ? "countdown, buzzes at 0" : (tg.length() > 0 ? tg : null);
+        menu.addItem(new WatchUi.MenuItem((i + 1).format("%d") + ". " + m.stepLabel(i), sub, i, null));
+    }
+    menu.addItem(new WatchUi.MenuItem("Start", null, :start, null));
+    return menu;
+}
+
+class PlansDelegate extends WatchUi.Menu2InputDelegate {
+    var m as HyroxModel;
+    function initialize(model as HyroxModel) { Menu2InputDelegate.initialize(); m = model; }
+    function onSelect(item as WatchUi.MenuItem) as Void {
+        var id = item.getId();
+        if (!(id instanceof Number)) { return; }
+        m.choose(id as Number);
+        WatchUi.switchToView(previewMenu(m), new PreviewDelegate(m), WatchUi.SLIDE_LEFT);
+    }
+    function onBack() as Void { WatchUi.popView(WatchUi.SLIDE_DOWN); }
+}
+
 
 
 class PreviewDelegate extends WatchUi.Menu2InputDelegate {
